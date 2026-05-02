@@ -11232,8 +11232,55 @@ function App() {
       setState(function (prev) {
         // Użyj zdalnych danych tylko jeśli mają subjects (czyli nie są puste)
         if (remoteData.subjects && Object.keys(remoteData.subjects).length > 0) {
+
+          // ── MERGE: dodaj nowe działy z INITIAL_SUBJECTS zachowując postęp ──
+          var mergedSubjects = _objectSpread({}, remoteData.subjects);
+          Object.keys(INITIAL_SUBJECTS).forEach(function(subjectKey) {
+            var initialSubject = INITIAL_SUBJECTS[subjectKey];
+            var remoteSubject = mergedSubjects[subjectKey];
+            if (!remoteSubject) {
+              // Cały przedmiot jest nowy – dodaj go w całości
+              mergedSubjects[subjectKey] = initialSubject;
+            } else {
+              // Przedmiot istnieje – sprawdź czy są nowe działy (sections)
+              var remoteSectionIds = (remoteSubject.sections || []).map(function(s){ return s.id; });
+              var newSections = (initialSubject.sections || []).filter(function(s){
+                return remoteSectionIds.indexOf(s.id) === -1;
+              });
+              if (newSections.length > 0) {
+                // Dołącz nowe sekcje na końcu
+                mergedSubjects[subjectKey] = _objectSpread(_objectSpread({}, remoteSubject), {}, {
+                  sections: (remoteSubject.sections || []).concat(newSections)
+                });
+              }
+              // Dla istniejących sekcji: zaktualizuj name/desc/links/quiz z INITIAL
+              // ale zachowaj postęp użytkownika (subtopics.done, notes, completed, progress)
+              if (mergedSubjects[subjectKey]) {
+                mergedSubjects[subjectKey] = _objectSpread(_objectSpread({}, mergedSubjects[subjectKey]), {}, {
+                  sections: mergedSubjects[subjectKey].sections.map(function(remoteSection) {
+                    var initialSection = (initialSubject.sections || []).find(function(s){ return s.id === remoteSection.id; });
+                    if (!initialSection) return remoteSection;
+                    // Zachowaj postęp, zaktualizuj metadane i dodaj nowe podtematy
+                    var remoteSubtopicIds = (remoteSection.subtopics || []).map(function(st){ return st.id; });
+                    var newSubtopics = (initialSection.subtopics || []).filter(function(st){
+                      return remoteSubtopicIds.indexOf(st.id) === -1;
+                    });
+                    return _objectSpread(_objectSpread({}, remoteSection), {}, {
+                      name: initialSection.name,
+                      desc: initialSection.desc,
+                      links: initialSection.links,
+                      quiz: initialSection.quiz,
+                      subtopics: (remoteSection.subtopics || []).concat(newSubtopics)
+                    });
+                  })
+                });
+              }
+            }
+          });
+          // ── KONIEC MERGE ──
+
           var merged = _objectSpread(_objectSpread({}, prev), {}, {
-            subjects: remoteData.subjects,
+            subjects: mergedSubjects,
             tracker: remoteData.tracker || prev.tracker,
             chatData: remoteData.chatData || prev.chatData
           });
