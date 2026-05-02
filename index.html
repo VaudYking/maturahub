@@ -1246,7 +1246,335 @@ var INITIAL_SUBJECTS = {
           {q:'Najważniejsze w mówieniu to:',opts:['komunikatywność i płynność','perfekcyjna gramatyka','akcent','długość'],ans:0},
         ]
       },
-    ]
+    ],
+    engData: {
+      words: [
+        {
+          id:'ew_czlowiek', name:'👤 Człowiek – wygląd i charakter',
+          words:[
+            {id:'ew_c1',pl:'wysoki',en:'tall'},
+            {id:'ew_c2',pl:'niski',en:'short'},
+            {id:'ew_c3',pl:'szczupły',en:'slim'},
+            {id:'ew_c4',pl:'z nadwagą',en:'overweight'},
+            {id:'ew_c5',pl:'dobrze zbudowany',en:'well-built'},
+            {id:'ew_c6',pl:'średniego wzrostu',en:'average height'},
+            {id:'ew_c7',pl:'łysy',en:'bald'},
+            {id:'ew_c8',pl:'kręcone włosy',en:'curly hair'},
+            {id:'ew_c9',pl:'proste włosy',en:'straight hair'},
+            {id:'ew_c10',pl:'farbowane włosy',en:'dyed hair'},
+            {id:'ew_c11',pl:'piegi',en:'freckles'},
+            {id:'ew_c12',pl:'broda',en:'beard'},
+            {id:'ew_c13',pl:'okulary',en:'glasses'},
+            {id:'ew_c14',pl:'przyjazny',en:'friendly'},
+            {id:'ew_c15',pl:'miły',en:'kind'},
+            {id:'ew_c16',pl:'pomocny',en:'helpful'},
+            {id:'ew_c17',pl:'nieśmiały',en:'shy'},
+            {id:'ew_c18',pl:'towarzyski',en:'outgoing'},
+            {id:'ew_c19',pl:'wyluzowany',en:'easy-going'},
+            {id:'ew_c20',pl:'ambitny',en:'ambitious'},
+            {id:'ew_c21',pl:'odpowiedzialny',en:'responsible'},
+            {id:'ew_c22',pl:'godny zaufania',en:'reliable'},
+            {id:'ew_c23',pl:'leniwy',en:'lazy'},
+            {id:'ew_c24',pl:'niegrzeczny',en:'rude'},
+            {id:'ew_c25',pl:'samolubny',en:'selfish'},
+            {id:'ew_c26',pl:'hojny',en:'generous'},
+            {id:'ew_c27',pl:'niecierpliwy',en:'impatient'},
+            {id:'ew_c28',pl:'humorzasty',en:'moody'},
+          ]
+        },
+        {
+          id:'ew_uczucia', name:'❤️ Uczucia i relacje',
+          words:[
+            {id:'ew_u1',pl:'podekscytowany',en:'excited'},
+            {id:'ew_u2',pl:'zdenerwowany',en:'nervous'},
+            {id:'ew_u3',pl:'zestresowany',en:'stressed'},
+            {id:'ew_u4',pl:'zmartwiony',en:'worried'},
+            {id:'ew_u5',pl:'sfrustrowany',en:'frustrated'},
+            {id:'ew_u6',pl:'zdezorientowany',en:'confused'},
+            {id:'ew_u7',pl:'odczuć ulgę',en:'relieved'},
+            {id:'ew_u8',pl:'zawstydzony',en:'embarrassed'},
+            {id:'ew_u9',pl:'rozczarowany',en:'disappointed'},
+            {id:'ew_u10',pl:'kolega z klasy',en:'classmate'},
+            {id:'ew_u11',pl:'sąsiad',en:'neighbour'},
+            {id:'ew_u12',pl:'dogadywać się',en:'get along with'},
+            {id:'ew_u13',pl:'pokłócić się',en:'fall out with'},
+            {id:'ew_u14',pl:'zaprzyjaźniać się',en:'make friends'},
+            {id:'ew_u15',pl:'ufać',en:'trust'},
+            {id:'ew_u16',pl:'wspierać',en:'support'},
+            {id:'ew_u17',pl:'radzić sobie',en:'deal with'},
+          ]
+        },
+        {
+          id:'ew_dom', name:'🏠 Dom i mieszkanie',
+          words:[
+            {id:'ew_d1',pl:'kuchnia',en:'kitchen'},
+            {id:'ew_d2',pl:'sypialnia',en:'bedroom'},
+            {id:'ew_d3',pl:'łazienka',en:'bathroom'},
+            {id:'ew_d4',pl:'salon',en:'living room'},
+            {id:'ew_d5',pl:'piwnica',en:'basement'},
+            {id:'ew_d6',pl:'strych',en:'attic'},
+            {id:'ew_d7',pl:'ogród',en:'garden'},
+            {id:'ew_d8',pl:'przedmieścia',en:'suburbs'},
+            {id:'ew_d9',pl:'kanapa',en:'sofa'},
+            {id:'ew_d10',pl:'szafa',en:'wardrobe'},
+            {id:'ew_d11',pl:'lodówka',en:'fridge'},
+            {id:'ew_d12',pl:'pralka',en:'washing machine'},
+            {id:'ew_d13',pl:'zmywarka',en:'dishwasher'},
+            {id:'ew_d14',pl:'dywan',en:'carpet'},
+            {id:'ew_d15',pl:'pilot',en:'remote control'},
+            {id:'ew_d16',pl:'przestronny',en:'spacious'},
+            {id:'ew_d17',pl:'przytulny',en:'cosy'},
+            {id:'ew_d18',pl:'nowoczesny',en:'modern'},
+            {id:'ew_d19',pl:'dobrze wyposażony',en:'well-equipped'},
+            {id:'ew_d20',pl:'wygodny',en:'comfortable'},
+            {id:'ew_d21',pl:'zepsuty',en:'broken'},
+            {id:'ew_d22',pl:'nie działa poprawnie',en:'not working properly'},
+            {id:'ew_d23',pl:'przeciek',en:'leak'},
+            {id:'ew_d24',pl:'ogrzewanie',en:'heating'},
+            {id:'ew_d25',pl:'głośny',en:'noisy'},
+          ]
+        },
+        {
+          id:'ew_edukacja', name:'📚 Edukacja',
+          words:[
+            {id:'ew_e1',pl:'przedmiot',en:'subject'},
+            {id:'ew_e2',pl:'plan lekcji',en:'timetable'},
+            {id:'ew_e3',pl:'semestr',en:'term'},
+            {id:'ew_e4',pl:'uczyć się',en:'study'},
+            {id:'ew_e5',pl:'powtarzać (materiał)',en:'revise'},
+            {id:'ew_e6',pl:'przygotowywać się do',en:'prepare for'},
+            {id:'ew_e7',pl:'egzamin',en:'exam'},
+            {id:'ew_e8',pl:'praca domowa',en:'homework'},
+            {id:'ew_e9',pl:'termin oddania pracy',en:'deadline'},
+            {id:'ew_e10',pl:'mieć trudności z',en:'have difficulty with'},
+            {id:'ew_e11',pl:'koncentrować się',en:'concentrate'},
+            {id:'ew_e12',pl:'oblać (egzamin)',en:'fail'},
+            {id:'ew_e13',pl:'zdać (egzamin)',en:'pass'},
+            {id:'ew_e14',pl:'poprawić (wyniki)',en:'improve'},
+            {id:'ew_e15',pl:'robić postępy',en:'make progress'},
+            {id:'ew_e16',pl:'uczęszczać (do szkoły)',en:'attend school'},
+            {id:'ew_e17',pl:'brać udział w',en:'take part in'},
+            {id:'ew_e18',pl:'zajęcia dodatkowe',en:'extracurricular activities'},
+            {id:'ew_e19',pl:'stypendium',en:'scholarship'},
+          ]
+        },
+        {
+          id:'ew_praca', name:'💼 Praca',
+          words:[
+            {id:'ew_p1',pl:'praca',en:'job'},
+            {id:'ew_p2',pl:'praca na pół etatu',en:'part-time job'},
+            {id:'ew_p3',pl:'praca na pełen etat',en:'full-time job'},
+            {id:'ew_p4',pl:'dobrze płatna',en:'well-paid'},
+            {id:'ew_p5',pl:'bezrobotny',en:'unemployed'},
+            {id:'ew_p6',pl:'zarabiać pieniądze',en:'earn money'},
+            {id:'ew_p7',pl:'zdobywać doświadczenie',en:'gain experience'},
+            {id:'ew_p8',pl:'kwalifikacje',en:'qualifications'},
+            {id:'ew_p9',pl:'obowiązki',en:'duties'},
+            {id:'ew_p10',pl:'wynagrodzenie',en:'salary'},
+            {id:'ew_p11',pl:'ubiegać się o pracę',en:'apply for a job'},
+            {id:'ew_p12',pl:'rozmowa kwalifikacyjna',en:'interview'},
+            {id:'ew_p13',pl:'pracodawca',en:'employer'},
+          ]
+        },
+        {
+          id:'ew_zakupy', name:'🛍️ Zakupy',
+          words:[
+            {id:'ew_z1',pl:'cena',en:'price'},
+            {id:'ew_z2',pl:'tani',en:'cheap'},
+            {id:'ew_z3',pl:'drogi',en:'expensive'},
+            {id:'ew_z4',pl:'móc sobie pozwolić',en:'afford'},
+            {id:'ew_z5',pl:'porównywać',en:'compare'},
+            {id:'ew_z6',pl:'zepsuty',en:'broken'},
+            {id:'ew_z7',pl:'uszkodzony',en:'damaged'},
+            {id:'ew_z8',pl:'wadliwy',en:'faulty'},
+            {id:'ew_z9',pl:'nieprawidłowy',en:'wrong'},
+            {id:'ew_z10',pl:'zwrócić (towar)',en:'return'},
+            {id:'ew_z11',pl:'zwrot pieniędzy',en:'refund'},
+            {id:'ew_z12',pl:'wymiana (towaru)',en:'exchange'},
+            {id:'ew_z13',pl:'reklamować',en:'complain'},
+          ]
+        },
+        {
+          id:'ew_zywienie', name:'🍽️ Żywienie',
+          words:[
+            {id:'ew_zyw1',pl:'napój',en:'drink'},
+            {id:'ew_zyw2',pl:'warzywa',en:'vegetables'},
+            {id:'ew_zyw3',pl:'owoce',en:'fruit'},
+            {id:'ew_zyw4',pl:'zdrowy',en:'healthy'},
+            {id:'ew_zyw5',pl:'niezdrowy',en:'unhealthy'},
+            {id:'ew_zyw6',pl:'świeży',en:'fresh'},
+            {id:'ew_zyw7',pl:'zamawiać',en:'order'},
+            {id:'ew_zyw8',pl:'rachunek',en:'bill'},
+            {id:'ew_zyw9',pl:'zarezerwować stolik',en:'book a table'},
+            {id:'ew_zyw10',pl:'obsługa',en:'service'},
+          ]
+        },
+        {
+          id:'ew_podroze', name:'✈️ Podróże i transport',
+          words:[
+            {id:'ew_po1',pl:'autobus',en:'bus'},
+            {id:'ew_po2',pl:'pociąg',en:'train'},
+            {id:'ew_po3',pl:'samolot',en:'plane'},
+            {id:'ew_po4',pl:'podróż (długa)',en:'journey'},
+            {id:'ew_po5',pl:'wycieczka (krótka)',en:'trip'},
+            {id:'ew_po6',pl:'zarezerwować pokój',en:'book a room'},
+            {id:'ew_po7',pl:'opóźnienie',en:'delay'},
+            {id:'ew_po8',pl:'odwołać',en:'cancel'},
+            {id:'ew_po9',pl:'spóźnić się (na coś)',en:'miss'},
+            {id:'ew_po10',pl:'zgubić bagaż',en:'lose luggage'},
+          ]
+        },
+        {
+          id:'ew_zdrowie', name:'🏥 Zdrowie',
+          words:[
+            {id:'ew_zd1',pl:'ból głowy',en:'headache'},
+            {id:'ew_zd2',pl:'grypa',en:'flu'},
+            {id:'ew_zd3',pl:'gorączka',en:'fever'},
+            {id:'ew_zd4',pl:'ból gardła',en:'sore throat'},
+            {id:'ew_zd5',pl:'choroba',en:'illness'},
+            {id:'ew_zd6',pl:'kontuzja',en:'injury'},
+            {id:'ew_zd7',pl:'ból',en:'pain'},
+            {id:'ew_zd8',pl:'lekarz',en:'doctor'},
+            {id:'ew_zd9',pl:'lek',en:'medicine'},
+            {id:'ew_zd10',pl:'wizyta (u lekarza)',en:'appointment'},
+            {id:'ew_zd11',pl:'leczenie',en:'treatment'},
+            {id:'ew_zd12',pl:'recepta',en:'prescription'},
+            {id:'ew_zd13',pl:'wyzdrowieć',en:'recover'},
+          ]
+        },
+        {
+          id:'ew_srodowisko', name:'🌍 Środowisko i przyroda',
+          words:[
+            {id:'ew_sr1',pl:'las',en:'forest'},
+            {id:'ew_sr2',pl:'rzeka',en:'river'},
+            {id:'ew_sr3',pl:'góry',en:'mountains'},
+            {id:'ew_sr4',pl:'wybrzeże',en:'coast'},
+            {id:'ew_sr5',pl:'krajobraz',en:'scenery'},
+            {id:'ew_sr6',pl:'dzika przyroda',en:'wildlife'},
+            {id:'ew_sr7',pl:'słonecznie',en:'sunny'},
+            {id:'ew_sr8',pl:'deszczowo',en:'rainy'},
+            {id:'ew_sr9',pl:'mgliście',en:'foggy'},
+            {id:'ew_sr10',pl:'wietrznie',en:'windy'},
+            {id:'ew_sr11',pl:'burza',en:'thunderstorm'},
+            {id:'ew_sr12',pl:'zanieczyszczenie',en:'pollution'},
+            {id:'ew_sr13',pl:'recykling',en:'recycle'},
+            {id:'ew_sr14',pl:'ograniczać',en:'reduce'},
+            {id:'ew_sr15',pl:'chronić',en:'protect'},
+            {id:'ew_sr16',pl:'zmiany klimatu',en:'climate change'},
+            {id:'ew_sr17',pl:'odpady',en:'waste'},
+          ]
+        },
+        {
+          id:'ew_technologia', name:'💻 Technologia',
+          words:[
+            {id:'ew_t1',pl:'telefon',en:'phone'},
+            {id:'ew_t2',pl:'komputer',en:'computer'},
+            {id:'ew_t3',pl:'laptop',en:'laptop'},
+            {id:'ew_t4',pl:'internet',en:'internet'},
+            {id:'ew_t5',pl:'strona internetowa',en:'website'},
+            {id:'ew_t6',pl:'aplikacja',en:'app'},
+            {id:'ew_t7',pl:'pobierać',en:'download'},
+            {id:'ew_t8',pl:'wysyłać (pliki)',en:'upload'},
+            {id:'ew_t9',pl:'wolny',en:'slow'},
+            {id:'ew_t10',pl:'nie działa',en:'not working'},
+          ]
+        },
+        {
+          id:'ew_ubrania', name:'👗 Ubrania',
+          words:[
+            {id:'ew_ub1',pl:'koszulka',en:'T-shirt'},
+            {id:'ew_ub2',pl:'dżinsy',en:'jeans'},
+            {id:'ew_ub3',pl:'kurtka',en:'jacket'},
+            {id:'ew_ub4',pl:'buty',en:'shoes'},
+            {id:'ew_ub5',pl:'formalny',en:'formal'},
+            {id:'ew_ub6',pl:'codzienny',en:'casual'},
+            {id:'ew_ub7',pl:'wygodny',en:'comfortable'},
+            {id:'ew_ub8',pl:'przymierzać',en:'try on'},
+            {id:'ew_ub9',pl:'pasować (o rozmiarze)',en:'fit'},
+            {id:'ew_ub10',pl:'rozmiar',en:'size'},
+          ]
+        },
+        {
+          id:'ew_panstwo', name:'🏛️ Państwo i społeczeństwo',
+          words:[
+            {id:'ew_pa1',pl:'przestępstwo',en:'crime'},
+            {id:'ew_pa2',pl:'złodziej',en:'thief'},
+            {id:'ew_pa3',pl:'kradzież',en:'robbery'},
+            {id:'ew_pa4',pl:'policja',en:'police'},
+            {id:'ew_pa5',pl:'komisariat',en:'police station'},
+            {id:'ew_pa6',pl:'prawo',en:'law'},
+            {id:'ew_pa7',pl:'rząd',en:'government'},
+            {id:'ew_pa8',pl:'głosować',en:'vote'},
+            {id:'ew_pa9',pl:'wybory',en:'election'},
+            {id:'ew_pa10',pl:'organizacja charytatywna',en:'charity'},
+          ]
+        },
+        {
+          id:'ew_kultura', name:'🎭 Kultura i rozrywka',
+          words:[
+            {id:'ew_ku1',pl:'kino',en:'cinema'},
+            {id:'ew_ku2',pl:'teatr',en:'theatre'},
+            {id:'ew_ku3',pl:'muzeum',en:'museum'},
+            {id:'ew_ku4',pl:'film',en:'film'},
+            {id:'ew_ku5',pl:'występ',en:'performance'},
+            {id:'ew_ku6',pl:'wystawa',en:'exhibition'},
+            {id:'ew_ku7',pl:'koncert',en:'concert'},
+            {id:'ew_ku8',pl:'scena',en:'stage'},
+            {id:'ew_ku9',pl:'publiczność',en:'audience'},
+            {id:'ew_ku10',pl:'aktor',en:'actor'},
+            {id:'ew_ku11',pl:'reżyser',en:'director'},
+          ]
+        },
+        {
+          id:'ew_czaswolny', name:'🎮 Czas wolny',
+          words:[
+            {id:'ew_cw1',pl:'wychodzić',en:'go out'},
+            {id:'ew_cw2',pl:'spędzać czas',en:'spend time'},
+            {id:'ew_cw3',pl:'odpoczywać',en:'relax'},
+            {id:'ew_cw4',pl:'interesujący',en:'interesting'},
+            {id:'ew_cw5',pl:'nudny',en:'boring'},
+            {id:'ew_cw6',pl:'przyjemny',en:'enjoyable'},
+          ]
+        },
+        {
+          id:'ew_mail', name:'✉️ Email i korespondencja',
+          words:[
+            {id:'ew_ma1',pl:'cześć',en:'Hi'},
+            {id:'ew_ma2',pl:'dzięki za maila',en:'Thanks for your email'},
+            {id:'ew_ma3',pl:'piszę żeby powiedzieć o',en:'I\'m writing to tell you about'},
+            {id:'ew_ma4',pl:'myślę że',en:'I think'},
+            {id:'ew_ma5',pl:'jednak',en:'however'},
+            {id:'ew_ma6',pl:'chociaż',en:'although'},
+            {id:'ew_ma7',pl:'niestety',en:'unfortunately'},
+            {id:'ew_ma8',pl:'na szczęście',en:'fortunately'},
+            {id:'ew_ma9',pl:'pozdrawiam',en:'best wishes'},
+          ]
+        },
+        {
+          id:'ew_obrazek', name:'🖼️ Opis obrazka',
+          words:[
+            {id:'ew_ob1',pl:'obrazek przedstawia',en:'The picture shows'},
+            {id:'ew_ob2',pl:'na obrazku widzę',en:'in the picture I can see'},
+            {id:'ew_ob3',pl:'siedzi',en:'is sitting'},
+            {id:'ew_ob4',pl:'stoi',en:'is standing'},
+            {id:'ew_ob5',pl:'rozmawia',en:'is talking'},
+            {id:'ew_ob6',pl:'ma na sobie',en:'is wearing'},
+            {id:'ew_ob7',pl:'po lewej',en:'on the left'},
+            {id:'ew_ob8',pl:'po prawej',en:'on the right'},
+            {id:'ew_ob9',pl:'w tle',en:'in the background'},
+            {id:'ew_ob10',pl:'na pierwszym planie',en:'in the foreground'},
+            {id:'ew_ob11',pl:'może',en:'maybe'},
+            {id:'ew_ob12',pl:'myślę że',en:'I think'},
+          ]
+        },
+      ],
+      sentences: [],
+      tenses: [],
+      imageDesc: [],
+      email: [],
+      quiz: [],
+      idioms: []
+    }
   }
 };
 
@@ -11277,6 +11605,22 @@ function App() {
               }
             }
           });
+          // ── MERGE engData.words (działy słówek angielskiego) ──
+          if (INITIAL_SUBJECTS.english && INITIAL_SUBJECTS.english.engData && INITIAL_SUBJECTS.english.engData.words) {
+            var remoteEng = mergedSubjects.english || {};
+            var remoteEngData = remoteEng.engData || {};
+            var remoteWords = remoteEngData.words || [];
+            var remoteWordIds = remoteWords.map(function(s){ return s.id; });
+            var initialWords = INITIAL_SUBJECTS.english.engData.words;
+            var newWordSections = initialWords.filter(function(s){ return remoteWordIds.indexOf(s.id) === -1; });
+            if (newWordSections.length > 0 || remoteWords.length === 0) {
+              mergedSubjects.english = _objectSpread(_objectSpread({}, remoteEng), {}, {
+                engData: _objectSpread(_objectSpread({ sentences:[], tenses:[], imageDesc:[], email:[], quiz:[], idioms:[] }, remoteEngData), {}, {
+                  words: remoteWords.concat(newWordSections)
+                })
+              });
+            }
+          }
           // ── KONIEC MERGE ──
 
           var merged = _objectSpread(_objectSpread({}, prev), {}, {
