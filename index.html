@@ -331,7 +331,7 @@
       max-width: 100% !important;
     }
 
-    /* Modals on mobile - centered with scroll */
+    /* Modals on mobile - centered */
     .modal-box {
       max-width: calc(100% - 24px) !important;
       width: calc(100% - 24px) !important;
@@ -340,8 +340,6 @@
       padding: 20px 16px !important;
       position: relative !important;
       bottom: auto !important;
-      left: auto !important;
-      right: auto !important;
       margin: 0 auto !important;
     }
     .modal-overlay {
@@ -368,6 +366,13 @@
       width: 100vw !important;
       height: 100vh !important;
       border-radius: 0 !important;
+    }
+    /* Wider scrollbar in minipainter on mobile */
+    .wb-scrollbar {
+      width: 40px !important;
+    }
+    .wb-scrollbar-thumb {
+      width: 36px !important;
     }
 
     /* Buttons font size */
@@ -2875,11 +2880,10 @@ var ChatMsg = function ChatMsg(_ref0) {
     src: msg.src,
     alt: "",
     style: {
-      maxWidth: '100%',
-      maxHeight: 480,
+      maxWidth: small ? 240 : 320,
+      maxHeight: small ? 180 : 280,
       display: 'block',
-      objectFit: 'contain',
-      borderRadius: 8
+      objectFit: 'contain'
     }
   }))), /*#__PURE__*/React.createElement("span", {
     style: {
@@ -3342,8 +3346,7 @@ var MiniPaint = function MiniPaint(_ref1) {
       // scrollbar drag
       var sd = scrollbarDragRef.current;
       if (sd) {
-        var clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        var dy = clientY - sd.startY;
+        var dy = e.clientY - sd.startY;
         var trackH = sd.viewH;
         var ratio = dy / (trackH - sd.thumbH);
         var next = Math.max(0, Math.min(CANVAS_EXTRA, sd.startScroll + ratio * CANVAS_EXTRA));
@@ -3865,7 +3868,18 @@ var MiniPaint = function MiniPaint(_ref1) {
       color: '#fff',
       fontWeight: 700
     }
-  }, "\uD83D\uDCE4 ", initialImage ? 'Zapisz' : 'Wyślij'))), /*#__PURE__*/React.createElement("div", {
+  }, "\uD83D\uDCE4 ", initialImage ? 'Zapisz' : 'Wyślij'),
+  window.innerWidth <= 768 && /*#__PURE__*/React.createElement(React.Fragment, null,
+    /*#__PURE__*/React.createElement("button", {
+      onTouchStart: function(e) { e.stopPropagation(); e.preventDefault(); var next = Math.max(0, scrollRef.current - 250); scrollRef.current = next; setScrollPos(next); },
+      style: { background:'var(--surface3)', border:'1px solid var(--border)', borderRadius:7, cursor:'pointer', padding:'3px 10px', fontSize:14, color:'var(--text)', touchAction:'none' }
+    }, "\u25B2"),
+    /*#__PURE__*/React.createElement("button", {
+      onTouchStart: function(e) { e.stopPropagation(); e.preventDefault(); var next = Math.min(CANVAS_EXTRA, scrollRef.current + 250); scrollRef.current = next; setScrollPos(next); },
+      style: { background:'var(--surface3)', border:'1px solid var(--border)', borderRadius:7, cursor:'pointer', padding:'3px 10px', fontSize:14, color:'var(--text)', touchAction:'none' }
+    }, "\u25BC")
+  )
+  )), /*#__PURE__*/React.createElement("div", {
     ref: containerRef,
     style: {
       flex: 1,
@@ -3934,9 +3948,9 @@ var MiniPaint = function MiniPaint(_ref1) {
     onMouseMove: draw,
     onMouseUp: endDraw,
     onMouseLeave: endDraw,
-    onTouchStart: function(e) { e.stopPropagation(); startDraw(e); },
-    onTouchMove: function(e) { e.stopPropagation(); if(drawing) draw(e); },
-    onTouchEnd: function(e) { e.stopPropagation(); endDraw(); }
+    onTouchStart: startDraw,
+    onTouchMove: draw,
+    onTouchEnd: endDraw
   }), textObjects.map(function (obj) {
     return /*#__PURE__*/React.createElement("div", {
       key: obj.id,
@@ -4180,6 +4194,7 @@ var MiniPaint = function MiniPaint(_ref1) {
     var thumbH = Math.max(40, viewH / totalH * viewH);
     var thumbTop = scrollPos / CANVAS_EXTRA * (viewH - thumbH);
     return /*#__PURE__*/React.createElement("div", {
+      className: "wb-scrollbar",
       style: {
         width: 8,
         position: 'relative',
@@ -4191,6 +4206,7 @@ var MiniPaint = function MiniPaint(_ref1) {
       onMouseDown: function onMouseDown(e) {
         var container = containerRef.current;
         if (!container) return;
+        var trackRect = e.currentTarget.getBoundingClientRect();
         var viewH = container.clientHeight;
         var totalH = viewH + CANVAS_EXTRA;
         var thumbH = Math.max(40, viewH / totalH * viewH);
@@ -4201,21 +4217,6 @@ var MiniPaint = function MiniPaint(_ref1) {
           thumbH: thumbH
         };
         e.preventDefault();
-      },
-      onTouchStart: function onTouchStart(e) {
-        var container = containerRef.current;
-        if (!container) return;
-        var viewH = container.clientHeight;
-        var totalH = viewH + CANVAS_EXTRA;
-        var thumbH = Math.max(40, viewH / totalH * viewH);
-        scrollbarDragRef.current = {
-          startY: e.touches[0].clientY,
-          startScroll: scrollRef.current,
-          viewH: viewH,
-          thumbH: thumbH
-        };
-        e.preventDefault();
-        e.stopPropagation();
       }
     }, /*#__PURE__*/React.createElement("div", {
       style: {
@@ -6872,7 +6873,7 @@ var EngImageDesc = function EngImageDesc(_ref19) {
     alt: "zadanie",
     style: {
       maxWidth: '100%',
-      maxHeight: 500,
+      maxHeight: 320,
       objectFit: 'contain',
       borderRadius: 10,
       cursor: 'zoom-in'
@@ -7151,7 +7152,7 @@ var EngEmail = function EngEmail(_ref20) {
     alt: "zadanie",
     style: {
       maxWidth: '100%',
-      maxHeight: 500,
+      maxHeight: 260,
       objectFit: 'contain',
       borderRadius: 10,
       cursor: 'zoom-in'
@@ -8602,156 +8603,6 @@ var EnglishView = function EnglishView(_ref25) {
 
 // ─── SUBJECT VIEW ─────────────────────────────────────────────────────────────
 
-// ─── ARKUSZE VIEW ─────────────────────────────────────────────────────────────
-var ArkuszeView = function ArkuszeView(_ref_ark) {
-  var subject = _ref_ark.subject;
-  var onUpdate = _ref_ark.onUpdate;
-  var arkusze = subject.arkusze || [];
-
-  var save = function save(updated) {
-    onUpdate(_objectSpread(_objectSpread({}, subject), {}, { arkusze: updated }));
-  };
-
-  var addArkusz = function addArkusz() {
-    var newArk = {
-      id: 'ark_' + Date.now(),
-      title: '',
-      year: '',
-      link: '',
-      notes: '',
-      done: false
-    };
-    save([].concat(_toConsumableArray(arkusze), [newArk]));
-  };
-
-  var updateArkusz = function updateArkusz(id, field, value) {
-    save(arkusze.map(function(a) {
-      return a.id === id ? _objectSpread(_objectSpread({}, a), {}, _defineProperty({}, field, value)) : a;
-    }));
-  };
-
-  var removeArkusz = function removeArkusz(id) {
-    if (!window.confirm('Usunąć ten arkusz?')) return;
-    save(arkusze.filter(function(a) { return a.id !== id; }));
-  };
-
-  var doneCnt = arkusze.filter(function(a) { return a.done; }).length;
-
-  return /*#__PURE__*/React.createElement("div", { style: { display:'flex', flexDirection:'column', gap:12 } },
-    // Header
-    /*#__PURE__*/React.createElement("div", { style: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:4 } },
-      /*#__PURE__*/React.createElement("div", null,
-        /*#__PURE__*/React.createElement("div", { style: { fontFamily:'Syne', fontWeight:700, fontSize:16 } }, "📄 Arkusze maturalne"),
-        arkusze.length > 0 && /*#__PURE__*/React.createElement("div", { style: { fontSize:12, color:'var(--muted)', marginTop:2 } },
-          doneCnt + " / " + arkusze.length + " zrealizowanych"
-        )
-      ),
-      /*#__PURE__*/React.createElement("button", {
-        onClick: addArkusz,
-        className: "btn",
-        style: { background: subject.color, border:'none', color:'#fff', fontSize:12 }
-      }, "+ Dodaj arkusz")
-    ),
-
-    // Empty state
-    arkusze.length === 0 && /*#__PURE__*/React.createElement("div", {
-      style: { textAlign:'center', padding:'40px 0', color:'var(--muted)', fontSize:13 }
-    },
-      /*#__PURE__*/React.createElement("div", { style: { fontSize:32, marginBottom:8 } }, "📄"),
-      "Brak arkuszy. Kliknij \"+ Dodaj arkusz\" aby doda\u0107."
-    ),
-
-    // List
-    arkusze.map(function(ark) {
-      return /*#__PURE__*/React.createElement("div", {
-        key: ark.id,
-        className: "card",
-        style: {
-          padding:16, borderLeft: '3px solid ' + (ark.done ? 'var(--green)' : subject.color),
-          opacity: ark.done ? 0.75 : 1
-        }
-      },
-        // Row 1: checkbox + title + year + delete
-        /*#__PURE__*/React.createElement("div", { style: { display:'flex', alignItems:'center', gap:10, marginBottom:10 } },
-          // Checkbox
-          /*#__PURE__*/React.createElement("div", {
-            onClick: function() { updateArkusz(ark.id, 'done', !ark.done); },
-            style: {
-              width:20, height:20, borderRadius:5, border:'2px solid ' + (ark.done ? 'var(--green)' : 'var(--border)'),
-              background: ark.done ? 'var(--green)' : 'transparent',
-              cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
-              transition:'all .15s'
-            }
-          }, ark.done && /*#__PURE__*/React.createElement("span", { style: { color:'#fff', fontSize:12, fontWeight:700 } }, "✓")),
-          // Title input
-          /*#__PURE__*/React.createElement("input", {
-            type: "text",
-            placeholder: "Nazwa / opis (np. Matura maj 2023)",
-            value: ark.title,
-            onChange: function(e) { updateArkusz(ark.id, 'title', e.target.value); },
-            style: {
-              flex:1, background:'var(--surface2)', border:'1px solid var(--border)',
-              borderRadius:8, padding:'6px 10px', color:'var(--text)', fontSize:13,
-              fontFamily:'Outfit,sans-serif',
-              textDecoration: ark.done ? 'line-through' : 'none'
-            }
-          }),
-          // Year input
-          /*#__PURE__*/React.createElement("input", {
-            type: "text",
-            placeholder: "Rok",
-            value: ark.year,
-            onChange: function(e) { updateArkusz(ark.id, 'year', e.target.value); },
-            style: {
-              width:70, background:'var(--surface2)', border:'1px solid var(--border)',
-              borderRadius:8, padding:'6px 8px', color:'var(--text)', fontSize:13,
-              fontFamily:'JetBrains Mono', textAlign:'center'
-            }
-          }),
-          // Delete
-          /*#__PURE__*/React.createElement("button", {
-            onClick: function() { removeArkusz(ark.id); },
-            style: { background:'none', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:16, padding:'0 4px', flexShrink:0 }
-          }, "🗑️")
-        ),
-        // Row 2: Link
-        /*#__PURE__*/React.createElement("div", { style: { display:'flex', alignItems:'center', gap:8, marginBottom:8 } },
-          /*#__PURE__*/React.createElement("span", { style: { fontSize:12, color:'var(--muted)', flexShrink:0 } }, "🔗 Link:"),
-          /*#__PURE__*/React.createElement("input", {
-            type: "url",
-            placeholder: "https://cke.gov.pl/... (link do pobrania arkusza)",
-            value: ark.link,
-            onChange: function(e) { updateArkusz(ark.id, 'link', e.target.value); },
-            style: {
-              flex:1, background:'var(--surface2)', border:'1px solid var(--border)',
-              borderRadius:8, padding:'6px 10px', color: ark.link ? 'var(--eng)' : 'var(--text)',
-              fontSize:12, fontFamily:'Outfit,sans-serif'
-            }
-          }),
-          ark.link && /*#__PURE__*/React.createElement("a", {
-            href: ark.link, target:'_blank', rel:'noopener',
-            style: { fontSize:12, color:'var(--eng)', textDecoration:'none', flexShrink:0, padding:'6px 10px', background:'rgba(59,130,246,.1)', border:'1px solid rgba(59,130,246,.3)', borderRadius:8 }
-          }, "Pobierz →")
-        ),
-        // Row 3: Notes
-        /*#__PURE__*/React.createElement("textarea", {
-          placeholder: "Notatki (np. co było trudne, jakie działy wyszły, co powtórzyć...)",
-          value: ark.notes,
-          onChange: function(e) { updateArkusz(ark.id, 'notes', e.target.value); },
-          rows: 2,
-          style: {
-            width:'100%', background:'var(--surface2)', border:'1px solid var(--border)',
-            borderRadius:8, padding:'8px 10px', color:'var(--muted)', fontSize:12,
-            fontFamily:'Outfit,sans-serif', resize:'vertical', outline:'none',
-            boxSizing:'border-box'
-          }
-        })
-      );
-    })
-  );
-};
-
-
 var SubjectView = function SubjectView(_ref26) {
   var subject = _ref26.subject,
     onUpdate = _ref26.onUpdate,
@@ -8760,10 +8611,6 @@ var SubjectView = function SubjectView(_ref26) {
     _useState110 = _slicedToArray(_useState109, 2),
     addModal = _useState110[0],
     setAddModal = _useState110[1];
-  var _useState_svtab = React.useState('dzialy'),
-    _useState_svtab2 = _slicedToArray(_useState_svtab, 2),
-    svTab = _useState_svtab2[0],
-    setSvTab = _useState_svtab2[1];
   var progress = calcSubjectProgress(subject);
   var color = subject.color;
   var _calcLevelFromProgres2 = calcLevelFromProgress(subject),
@@ -8919,29 +8766,20 @@ var SubjectView = function SubjectView(_ref26) {
     color: "var(--gold)",
     height: 4
   }))), /*#__PURE__*/React.createElement("div", {
-    style: { display:'flex', gap:8, marginBottom:16, alignItems:'center', justifyContent:'space-between', flexWrap:'wrap' }
-  },
-    /*#__PURE__*/React.createElement("div", { style: { display:'flex', gap:6 } },
-      /*#__PURE__*/React.createElement("button", {
-        onClick: function() { setSvTab('dzialy'); },
-        className: "btn " + (svTab === 'dzialy' ? '' : 'btn-ghost'),
-        style: { fontSize:12, background: svTab==='dzialy' ? subject.color : '', borderColor: svTab==='dzialy' ? subject.color : '', color: svTab==='dzialy' ? '#fff' : '' }
-      }, "\uD83D\uDCDA Dzia\u0142y"),
-      /*#__PURE__*/React.createElement("button", {
-        onClick: function() { setSvTab('arkusze'); },
-        className: "btn " + (svTab === 'arkusze' ? '' : 'btn-ghost'),
-        style: { fontSize:12, background: svTab==='arkusze' ? subject.color : '', borderColor: svTab==='arkusze' ? subject.color : '', color: svTab==='arkusze' ? '#fff' : '' }
-      }, "\uD83D\uDCC4 Arkusze")
-    ),
-    svTab === 'dzialy' && /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-ghost",
-      onClick: function onClick() { return setAddModal(true); },
-      style: { fontSize:12 }
-    }, /*#__PURE__*/React.createElement(Icon, { name: "plus", size: 14 }), " Dodaj w\u0142asny dzia\u0142")
-  ),
-  svTab === 'arkusze'
-    ? /*#__PURE__*/React.createElement(ArkuszeView, { subject: subject, onUpdate: onUpdate })
-    : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'flex-end',
+      marginBottom: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-ghost",
+    onClick: function onClick() {
+      return setAddModal(true);
+    }
+  }, /*#__PURE__*/React.createElement(Icon, {
+    name: "plus",
+    size: 14
+  }), " Dodaj w\u0142asny dzia\u0142")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexDirection: 'column',
