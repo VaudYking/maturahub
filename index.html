@@ -367,14 +367,6 @@
       height: 100vh !important;
       border-radius: 0 !important;
     }
-    /* Wider scrollbar in minipainter on mobile */
-    .wb-scrollbar {
-      width: 40px !important;
-    }
-    .wb-scrollbar-thumb {
-      width: 36px !important;
-    }
-
     /* Buttons font size */
     .btn { font-size: 12px; padding: 8px 12px; }
 
@@ -3479,7 +3471,7 @@ var MiniPaint = function MiniPaint(_ref1) {
     var canvas = canvasRef.current;
     if (!canvas) return;
     var container = containerRef.current;
-    var cw = container ? container.clientWidth - 14 : winSize.w; // 14 = scrollbar width
+    var cw = container ? container.clientWidth : winSize.w;
     var viewH = container ? container.clientHeight : winSize.h - 90;
     var ch = viewH + CANVAS_EXTRA;
     // Physical pixels = CSS pixels × DPR
@@ -4680,57 +4672,7 @@ var MiniPaint = function MiniPaint(_ref1) {
       cursor: 'pointer',
       fontFamily: 'Syne,sans-serif'
     }
-  }, "\u2715"))), function () {
-    var container = containerRef.current;
-    var viewH = container ? container.clientHeight : 400;
-    var totalH = viewH + CANVAS_EXTRA;
-    var thumbH = Math.max(40, viewH / totalH * viewH);
-    var thumbTop = scrollPos / CANVAS_EXTRA * (viewH - thumbH);
-    return /*#__PURE__*/React.createElement("div", {
-      className: "wb-scrollbar",
-      style: {
-        width: 8,
-        position: 'relative',
-        background: 'rgba(255,255,255,0.04)',
-        flexShrink: 0,
-        borderRadius: 4,
-        margin: '4px 3px'
-      },
-      onMouseDown: function onMouseDown(e) {
-        var container = containerRef.current;
-        if (!container) return;
-        var trackRect = e.currentTarget.getBoundingClientRect();
-        var viewH = container.clientHeight;
-        var totalH = viewH + CANVAS_EXTRA;
-        var thumbH = Math.max(40, viewH / totalH * viewH);
-        scrollbarDragRef.current = {
-          startY: e.clientY,
-          startScroll: scrollRef.current,
-          viewH: viewH,
-          thumbH: thumbH
-        };
-        e.preventDefault();
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        top: thumbTop,
-        height: thumbH,
-        background: 'rgba(255,255,255,0.22)',
-        borderRadius: 4,
-        cursor: 'pointer',
-        transition: 'background .15s'
-      },
-      onMouseEnter: function onMouseEnter(e) {
-        return e.currentTarget.style.background = 'rgba(255,255,255,0.38)';
-      },
-      onMouseLeave: function onMouseLeave(e) {
-        return e.currentTarget.style.background = 'rgba(255,255,255,0.22)';
-      }
-    }));
-  }()))), document.body);
+  }, "\u2715")))))), document.body);
 };
 
 // ─── SUBTOPIC CHAT ────────────────────────────────────────────────────────────
@@ -11710,6 +11652,10 @@ function App() {
     _useState124 = _slicedToArray(_useState123, 2),
     view = _useState124[0],
     setView = _useState124[1];
+  // Flaga: czy dane z Supabase już załadowane (streak obliczamy dopiero wtedy)
+  var _useStateStreakReady = React.useState(false),
+    streakReady = _useStateStreakReady[0][0] !== undefined ? false : false;
+  var streakReadyRef = React.useRef(false);
   var _useState125 = useState(false),
     _useState126 = _slicedToArray(_useState125, 2),
     showBackup = _useState126[0],
@@ -11809,6 +11755,7 @@ function App() {
             chatData: remoteData.chatData || prev.chatData
           });
           saveData(merged); // zaktualizuj localStorage
+          streakReadyRef.current = true;
           return merged;
         }
         return prev;
@@ -11858,19 +11805,24 @@ function App() {
     };
   }, [state]);
 
-  // Logika streak — aktualizuj przy każdym wejściu do aplikacji
+  // Logika streak — uruchamiana raz po załadowaniu danych (lokalnych lub Supabase)
+  // Używamy ref żeby nie odpalać ponownie gdy stan się zmienia
+  var streakDoneRef = React.useRef(false);
   useEffect(function () {
-    var today = getTodayKey();
-    if (state.tracker.lastActive !== today) {
-      var lastDate = new Date(state.tracker.lastActive);
-      var todayDate = new Date(today);
-      var diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24));
-      var newStreak = diffDays === 1 ? state.tracker.streak + 1 : 1;
-      // Shift weekHistory forward by diffDays (keep past data, zero out skipped days)
-      var prev = state.tracker.weekHistory || [0, 0, 0, 0, 0, 0, 0];
-      var shift = Math.min(diffDays, 7);
-      var newWeekHistory = [].concat(_toConsumableArray(prev.slice(shift)), _toConsumableArray(Array(shift).fill(0)));
+    // Poczekaj aż Supabase załaduje dane (max 4s), potem oblicz streak
+    var applyStreak = function applyStreak() {
+      if (streakDoneRef.current) return;
+      streakDoneRef.current = true;
       setState(function (prevS) {
+        var today = getTodayKey();
+        if (prevS.tracker.lastActive === today) return prevS; // już dzisiaj sprawdzono
+        var lastDate = new Date(prevS.tracker.lastActive);
+        var todayDate = new Date(today);
+        var diffDays = Math.round((todayDate - lastDate) / (1000 * 60 * 60 * 24));
+        var newStreak = diffDays === 1 ? prevS.tracker.streak + 1 : 1;
+        var prev = prevS.tracker.weekHistory || [0, 0, 0, 0, 0, 0, 0];
+        var shift = Math.min(diffDays, 7);
+        var newWeekHistory = [].concat(_toConsumableArray(prev.slice(shift)), _toConsumableArray(Array(shift).fill(0)));
         return _objectSpread(_objectSpread({}, prevS), {}, {
           tracker: _objectSpread(_objectSpread({}, prevS.tracker), {}, {
             lastActive: today,
@@ -11881,7 +11833,10 @@ function App() {
           })
         });
       });
-    }
+    };
+    // Daj Supabase 2.5s na załadowanie, potem aplikuj streak na aktualnym state
+    var t = setTimeout(applyStreak, 2500);
+    return function () { clearTimeout(t); };
   }, []);
   useEffect(function () {
     saveData(state);
