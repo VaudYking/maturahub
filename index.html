@@ -8964,7 +8964,6 @@ var MathWarmup = function MathWarmup() {
     {id:'sub', label:'Odejmowanie', sym:'-'},
     {id:'mul', label:'Mnożenie', sym:'×'},
     {id:'div', label:'Dzielenie', sym:'÷'},
-    {id:'tab', label:'Tabliczka mnożenia', sym:'×'},
   ];
   var LEVELS = [
     {val:5,label:'do 5'},
@@ -9007,11 +9006,7 @@ var MathWarmup = function MathWarmup() {
 
   function genQuestion(catId, max) {
     var a, b, q, ans;
-    if (catId === 'tab') {
-      a = Math.floor(Math.random()*(max-1))+2;
-      b = Math.floor(Math.random()*9)+2;
-      q = a + ' × ' + b; ans = a*b;
-    } else if (catId === 'add') {
+    if (catId === 'add') {
       a = Math.floor(Math.random()*max)+1;
       b = Math.floor(Math.random()*max)+1;
       q = a + ' + ' + b; ans = a+b;
@@ -9044,22 +9039,41 @@ var MathWarmup = function MathWarmup() {
     var num = parseInt(answer, 10);
     var q = questions[qIdx];
     var correct = num === q.ans;
-    setFeedback(correct ? 'ok' : 'err_' + q.ans);
     var newResults = results.concat([{q: q.q, ans: q.ans, given: num, ok: correct}]);
-    setTimeout(function() {
-      setFeedback(null);
-      setAnswer('');
+    setAnswer('');
+    if (!correct) {
+      // Przy błędzie pokaż feedback przez 900ms (żeby zobaczyć poprawną odpowiedź)
+      setFeedback('err_' + q.ans);
+      setResults(newResults);
+      setTimeout(function() {
+        setFeedback(null);
+        if (qIdx+1 >= questions.length) {
+          var t = (Date.now()-startTime)/1000;
+          setElapsed(t);
+          var score = newResults.filter(function(r){return r.ok;}).length;
+          saveRecord(cat, maxN, score, questions.length, t);
+          setPhase('result');
+        } else {
+          setQIdx(qIdx+1);
+          setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },50);
+        }
+      }, 900);
+    } else {
+      // Przy poprawnej — natychmiastowe przejście, tylko mignięcie zielonego
+      setFeedback('ok');
+      setResults(newResults);
+      setTimeout(function(){ setFeedback(null); }, 200);
       if (qIdx+1 >= questions.length) {
         var t = (Date.now()-startTime)/1000;
         setElapsed(t);
-        var score = newResults.filter(function(r){return r.ok;}).length;
-        saveRecord(cat, maxN, score, questions.length, t);
-        setResults(newResults); setPhase('result');
+        var score2 = newResults.filter(function(r){return r.ok;}).length;
+        saveRecord(cat, maxN, score2, questions.length, t);
+        setTimeout(function(){ setPhase('result'); }, 200);
       } else {
-        setResults(newResults); setQIdx(qIdx+1);
-        setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },50);
+        setQIdx(qIdx+1);
+        setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },30);
       }
-    }, 700);
+    }
   }
 
   function handleKey(e) {
@@ -11940,40 +11954,46 @@ function App() {
     label: 'Dziennik',
     icon: 'book'
   };
+  // Renderuj wszystkie widoki jednocześnie - ukrywaj przez display:none zamiast odmontowywać
+  // Dzięki temu state wewnętrzny (AI chat, fiszki, quiz, rozgrzewka) przeżywa zmianę zakładki
+  var hide = function hide(v) { return { display: view === v ? 'block' : 'none' }; };
   var renderView = function renderView() {
-    if (view === 'dashboard') return /*#__PURE__*/React.createElement(Dashboard, {
-      subjects: state.subjects,
-      tracker: state.tracker
-    });
-    if (view === 'tracker') return /*#__PURE__*/React.createElement(TrackerView, {
-      tracker: state.tracker,
-      onUpdate: updateTracker,
-      workerRef: globalWorkerRef
-    });
-    if (view === 'english') return /*#__PURE__*/React.createElement(EnglishView, {
-      subject: state.subjects.english,
-      onUpdate: updateSubject
-    });
-    if (view === 'chat') return /*#__PURE__*/React.createElement(ChatView, {
-      chatData: state.chatData || {
-        math: [],
-        polish: [],
-        english: []
-      },
-      onUpdate: updateChatData
-    });
-    if (view === 'diary') return /*#__PURE__*/React.createElement(DiaryView, null);
-    if (view === 'ai') return /*#__PURE__*/React.createElement(AIView, { subjects: state.subjects });
-    if (view === 'math' && state.subjects.math) return /*#__PURE__*/React.createElement(MathView, {
-      subject: state.subjects.math,
-      onUpdate: updateSubject
-    });
-    if (state.subjects[view]) return /*#__PURE__*/React.createElement(SubjectView, {
-      subject: state.subjects[view],
-      onUpdate: updateSubject,
-      searchQuery: ""
-    });
-    return null;
+    return /*#__PURE__*/React.createElement('div', null,
+      /*#__PURE__*/React.createElement('div', {style: hide('dashboard')}, /*#__PURE__*/React.createElement(Dashboard, {
+        subjects: state.subjects,
+        tracker: state.tracker
+      })),
+      /*#__PURE__*/React.createElement('div', {style: hide('tracker')}, /*#__PURE__*/React.createElement(TrackerView, {
+        tracker: state.tracker,
+        onUpdate: updateTracker,
+        workerRef: globalWorkerRef
+      })),
+      /*#__PURE__*/React.createElement('div', {style: hide('english')}, /*#__PURE__*/React.createElement(EnglishView, {
+        subject: state.subjects.english,
+        onUpdate: updateSubject
+      })),
+      /*#__PURE__*/React.createElement('div', {style: hide('chat')}, /*#__PURE__*/React.createElement(ChatView, {
+        chatData: state.chatData || { math: [], polish: [], english: [] },
+        onUpdate: updateChatData
+      })),
+      /*#__PURE__*/React.createElement('div', {style: hide('diary')}, /*#__PURE__*/React.createElement(DiaryView, null)),
+      /*#__PURE__*/React.createElement('div', {style: hide('ai')}, /*#__PURE__*/React.createElement(AIView, { subjects: state.subjects })),
+      /*#__PURE__*/React.createElement('div', {style: hide('math')}, state.subjects.math && /*#__PURE__*/React.createElement(MathView, {
+        subject: state.subjects.math,
+        onUpdate: updateSubject
+      })),
+      /*#__PURE__*/React.createElement('div', {style: hide('polish')}, state.subjects.polish && /*#__PURE__*/React.createElement(SubjectView, {
+        subject: state.subjects.polish,
+        onUpdate: updateSubject,
+        searchQuery: ""
+      })),
+      view && !['dashboard','tracker','english','chat','diary','ai','math','polish'].includes(view) && state.subjects[view] &&
+        /*#__PURE__*/React.createElement(SubjectView, {
+          subject: state.subjects[view],
+          onUpdate: updateSubject,
+          searchQuery: ""
+        })
+    );
   };
 
   // All nav items including diary for mobile bottom bar
