@@ -7723,857 +7723,717 @@ var EngEmail = function EngEmail(_ref20) {
 };
 
 /* ---------- FISZKI ---------- */
+// ─── SRS ENGINE (Spaced Repetition) ──────────────────────────────────────────
+// Klucz localStorage dla danych SRS
+var SRS_KEY = 'engSRS_v2';
+function srsLoad() {
+  try { return JSON.parse(localStorage.getItem(SRS_KEY) || '{}'); } catch(e) { return {}; }
+}
+function srsSave(data) {
+  try { localStorage.setItem(SRS_KEY, JSON.stringify(data)); } catch(e) {}
+}
+// easiness: 2.5 (EF), interval: 1, reps: 0, due: timestamp, totalReviews, correct
+function srsInit(wordId) {
+  return { ef: 2.5, interval: 1, reps: 0, due: Date.now(), totalReviews: 0, correct: 0, streak: 0 };
+}
+function srsUpdate(card, rating) {
+  // rating: 0=znowu, 1=trudne, 2=dobre, 3=łatwe (SM2-inspired)
+  var c = Object.assign({}, card);
+  c.totalReviews = (c.totalReviews || 0) + 1;
+  if (rating >= 2) {
+    c.correct = (c.correct || 0) + 1;
+    c.streak = (c.streak || 0) + 1;
+    if (c.reps === 0) c.interval = 1;
+    else if (c.reps === 1) c.interval = 6;
+    else c.interval = Math.round(c.interval * c.ef);
+    c.reps += 1;
+    var efDelta = 0.1 - (3 - rating) * (0.08 + (3 - rating) * 0.02);
+    c.ef = Math.max(1.3, c.ef + efDelta);
+    if (rating === 3) c.interval = Math.round(c.interval * 1.3);
+  } else {
+    c.streak = 0;
+    c.reps = 0;
+    c.interval = 1;
+  }
+  c.due = Date.now() + c.interval * 24*60*60*1000;
+  return c;
+}
+function srsGetStatus(card) {
+  if (!card || card.totalReviews === 0) return 'new';
+  var pct = card.totalReviews > 0 ? (card.correct||0)/card.totalReviews : 0;
+  if (pct >= 0.8 && card.reps >= 3) return 'green';
+  if (pct >= 0.5 || card.reps >= 1) return 'orange';
+  return 'red';
+}
+function srsDue(card) {
+  if (!card) return true;
+  return Date.now() >= (card.due || 0);
+}
+
+// ─── ENG FLASHCARDS (rozbudowane) ─────────────────────────────────────────────
 var EngFlashcards = function EngFlashcards(_ref21) {
   var wordsData = _ref21.wordsData;
-  // Zbierz wszystkie słowa ze wszystkich działów
-  var allWords = React.useMemo(function () {
+
+  // Zbierz słowa
+  var allWords = React.useMemo(function() {
     var out = [];
-    (wordsData || []).forEach(function (sec) {
-      (sec.words || []).forEach(function (w) {
-        if (w.pl && w.en) out.push({
-          pl: w.pl,
-          en: w.en,
-          secName: sec.name,
-          secId: sec.id,
-          status: w.status || null
-        });
+    (wordsData||[]).forEach(function(sec) {
+      (sec.words||[]).forEach(function(w) {
+        if (w.pl && w.en) out.push({ pl:w.pl, en:w.en, secName:sec.name, secId:sec.id, id:w.id||('w_'+w.pl) });
       });
     });
     return out;
   }, [wordsData]);
-  var sections = React.useMemo(function () {
-    return (wordsData || []).filter(function (s) {
-      return s.words && s.words.some(function (w) {
-        return w.pl && w.en;
-      });
-    });
+  var sections = React.useMemo(function() {
+    return (wordsData||[]).filter(function(s){ return s.words && s.words.some(function(w){ return w.pl&&w.en; }); });
   }, [wordsData]);
-  var _React$useState29 = React.useState('pl2en'),
-    _React$useState30 = _slicedToArray(_React$useState29, 2),
-    mode = _React$useState30[0],
-    setMode = _React$useState30[1]; // pl2en | en2pl
-  var _React$useState31 = React.useState([]),
-    _React$useState32 = _slicedToArray(_React$useState31, 2),
-    deck = _React$useState32[0],
-    setDeck = _React$useState32[1];
-  var _React$useState33 = React.useState(0),
-    _React$useState34 = _slicedToArray(_React$useState33, 2),
-    idx = _React$useState34[0],
-    setIdx = _React$useState34[1];
-  var _React$useState35 = React.useState(false),
-    _React$useState36 = _slicedToArray(_React$useState35, 2),
-    flipped = _React$useState36[0],
-    setFlipped = _React$useState36[1];
-  var _React$useState37 = React.useState([]),
-    _React$useState38 = _slicedToArray(_React$useState37, 2),
-    results = _React$useState38[0],
-    setResults = _React$useState38[1]; // 'ok' | 'nok'
-  var _React$useState39 = React.useState(false),
-    _React$useState40 = _slicedToArray(_React$useState39, 2),
-    done = _React$useState40[0],
-    setDone = _React$useState40[1];
-  var _React$useState41 = React.useState(false),
-    _React$useState42 = _slicedToArray(_React$useState41, 2),
-    started = _React$useState42[0],
-    setStarted = _React$useState42[1];
-  var _React$useState43 = React.useState('all'),
-    _React$useState44 = _slicedToArray(_React$useState43, 2),
-    filterStatus = _React$useState44[0],
-    setFilterStatus = _React$useState44[1]; // all | red | orange | green
-  var _React$useState45 = React.useState('all'),
-    _React$useState46 = _slicedToArray(_React$useState45, 2),
-    filterSection = _React$useState46[0],
-    setFilterSection = _React$useState46[1]; // all | secId
 
-  // Słowa z wybranego działu
-  var sectionFiltered = React.useMemo(function () {
-    if (filterSection === 'all') return allWords;
-    return allWords.filter(function (w) {
-      return w.secId === filterSection;
-    });
-  }, [allWords, filterSection]);
-
-  // Liczby dla statusów (zawsze z aktualnego działu)
-  var statusCounts = React.useMemo(function () {
-    return {
-      red: sectionFiltered.filter(function (w) {
-        return w.status === 'red';
-      }).length,
-      orange: sectionFiltered.filter(function (w) {
-        return w.status === 'orange';
-      }).length,
-      green: sectionFiltered.filter(function (w) {
-        return w.status === 'green';
-      }).length,
-      all: sectionFiltered.length
-    };
-  }, [sectionFiltered]);
-
-  // Końcowy zestaw słów po obu filtrach
-  var allWordsFiltered = React.useMemo(function () {
-    if (filterStatus === 'all') return sectionFiltered;
-    return sectionFiltered.filter(function (w) {
-      return w.status === filterStatus;
-    });
-  }, [sectionFiltered, filterStatus]);
-  var start = function start() {
-    var shuffled = _toConsumableArray(allWordsFiltered).sort(function () {
-      return Math.random() - .5;
-    });
-    setDeck(shuffled);
-    setIdx(0);
-    setFlipped(false);
-    setResults([]);
-    setDone(false);
-    setStarted(true);
-  };
-  var answer = function answer(ok) {
-    var newResults = [].concat(_toConsumableArray(results), [ok ? 'ok' : 'nok']);
-    setResults(newResults);
-    if (idx + 1 >= deck.length) {
-      setDone(true);
-      return;
-    }
-    setIdx(function (i) {
-      return i + 1;
-    });
-    setFlipped(false);
-  };
-  var card = deck[idx];
-  var front = card ? mode === 'pl2en' ? card.pl : card.en : '';
-  var back = card ? mode === 'pl2en' ? card.en : card.pl : '';
-  var okCount = results.filter(function (r) {
-    return r === 'ok';
-  }).length;
-  var pct = deck.length ? Math.round(okCount / deck.length * 100) : 0;
-  if (allWords.length === 0) return /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      padding: '40px 0',
-      color: 'var(--muted)'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 48,
-      marginBottom: 12
-    }
-  }, "\uD83C\uDCCF"), /*#__PURE__*/React.createElement("p", null, "Najpierw dodaj s\u0142\xF3wka w zak\u0142adce ", /*#__PURE__*/React.createElement("strong", null, "S\u0142owa"), "!"));
-  if (!started) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18,
-      marginBottom: 16
-    }
-  }, "\uD83C\uDCCF Fiszki"), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: 'var(--muted)',
-      fontSize: 13,
-      marginBottom: 16
-    }
-  }, "Masz ", /*#__PURE__*/React.createElement("strong", {
-    style: {
-      color: 'var(--text)'
-    }
-  }, allWords.length), " s\u0142\xF3wek \u0142\u0105cznie. Wybierz ustawienia i zacznij!"), sections.length > 1 && /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--muted)',
-      marginBottom: 8,
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '.05em'
-    }
-  }, "Dzia\u0142"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: function onClick() {
-      return setFilterSection('all');
-    },
-    style: {
-      padding: '6px 14px',
-      borderRadius: 8,
-      border: "1px solid ".concat(filterSection === 'all' ? 'var(--eng)' : 'var(--border)'),
-      background: filterSection === 'all' ? 'rgba(59,130,246,.13)' : 'transparent',
-      color: filterSection === 'all' ? 'var(--eng)' : 'var(--muted)',
-      cursor: 'pointer',
-      fontSize: 12,
-      fontFamily: 'Outfit,sans-serif',
-      transition: 'all .15s'
-    }
-  }, "Wszystkie dzia\u0142y (", allWords.length, ")"), sections.map(function (sec) {
-    var cnt = (sec.words || []).filter(function (w) {
-      return w.pl && w.en;
-    }).length;
-    return /*#__PURE__*/React.createElement("button", {
-      key: sec.id,
-      onClick: function onClick() {
-        return setFilterSection(sec.id);
-      },
-      style: {
-        padding: '6px 14px',
-        borderRadius: 8,
-        border: "1px solid ".concat(filterSection === sec.id ? 'var(--eng)' : 'var(--border)'),
-        background: filterSection === sec.id ? 'rgba(59,130,246,.13)' : 'transparent',
-        color: filterSection === sec.id ? 'var(--eng)' : 'var(--muted)',
-        cursor: 'pointer',
-        fontSize: 12,
-        fontFamily: 'Outfit,sans-serif',
-        transition: 'all .15s'
-      }
-    }, sec.name, " (", cnt, ")");
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--muted)',
-      marginBottom: 8,
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '.05em'
-    }
-  }, "Kierunek"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn ".concat(mode === 'pl2en' ? 'btn-primary' : 'btn-ghost'),
-    onClick: function onClick() {
-      return setMode('pl2en');
-    }
-  }, "\uD83C\uDDF5\uD83C\uDDF1 \u2192 \uD83C\uDDEC\uD83C\uDDE7 Polski \u2192 Angielski"), /*#__PURE__*/React.createElement("button", {
-    className: "btn ".concat(mode === 'en2pl' ? 'btn-primary' : 'btn-ghost'),
-    onClick: function onClick() {
-      return setMode('en2pl');
-    }
-  }, "\uD83C\uDDEC\uD83C\uDDE7 \u2192 \uD83C\uDDF5\uD83C\uDDF1 Angielski \u2192 Polski"))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 20
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--muted)',
-      marginBottom: 8,
-      fontWeight: 600,
-      textTransform: 'uppercase',
-      letterSpacing: '.05em'
-    }
-  }, "Filtruj po statusie"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      flexWrap: 'wrap'
-    }
-  }, [{
-    v: 'all',
-    label: 'Wszystkie',
-    c: 'var(--eng)'
-  }, {
-    v: 'red',
-    label: '🔴 Nie umiem',
-    c: '#ef4444'
-  }, {
-    v: 'orange',
-    label: '🟠 Uczę się',
-    c: '#f97316'
-  }, {
-    v: 'green',
-    label: '🟢 Umiem',
-    c: '#22c55e'
-  }].map(function (_ref22) {
-    var v = _ref22.v,
-      label = _ref22.label,
-      c = _ref22.c;
-    return /*#__PURE__*/React.createElement("button", {
-      key: v,
-      onClick: function onClick() {
-        return setFilterStatus(v);
-      },
-      style: {
-        padding: '6px 14px',
-        borderRadius: 8,
-        border: "1px solid ".concat(filterStatus === v ? c : 'var(--border)'),
-        background: filterStatus === v ? "".concat(c, "22") : 'transparent',
-        color: filterStatus === v ? c : 'var(--muted)',
-        cursor: 'pointer',
-        fontSize: 12,
-        fontFamily: 'Outfit,sans-serif',
-        transition: 'all .15s'
-      }
-    }, label, " (", statusCounts[v], ")");
-  }))), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    style: {
-      width: '100%',
-      padding: '12px'
-    },
-    onClick: start,
-    disabled: allWordsFiltered.length === 0
-  }, "\u25B6 Start (", allWordsFiltered.length, " s\u0142\xF3wek)")));
-  if (done) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18,
-      marginBottom: 16
-    }
-  }, "\uD83C\uDCCF Fiszki \u2014 Wynik"), /*#__PURE__*/React.createElement("div", {
-    className: "card",
-    style: {
-      textAlign: 'center',
-      padding: '32px 20px'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 56,
-      marginBottom: 12
-    }
-  }, pct >= 80 ? '🏆' : pct >= 50 ? '👍' : '📚'), /*#__PURE__*/React.createElement("h2", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 32,
-      marginBottom: 8
-    }
-  }, okCount, " / ", deck.length), /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: 'var(--muted)',
-      marginBottom: 20
-    }
-  }, pct >= 80 ? 'Świetnie! Opanowałeś te słówka.' : pct >= 50 ? 'Nieźle! Powtórz trudniejsze.' : 'Trzeba więcej ćwiczyć!'), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 24,
-      maxWidth: 320,
-      margin: '0 auto 24px'
-    }
-  }, /*#__PURE__*/React.createElement(ProgressBar, {
-    value: pct,
-    color: pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--gold)' : 'var(--math)',
-    height: 10,
-    showLabel: true
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      justifyContent: 'center',
-      flexWrap: 'wrap'
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    onClick: start
-  }, "\uD83D\uDD04 Powt\xF3rz t\u0119 sam\u0105 tali\u0119"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    onClick: function onClick() {
-      return setStarted(false);
-    }
-  }, "\u2699\uFE0F Zmie\u0144 ustawienia"))));
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18
-    }
-  }, "\uD83C\uDCCF Fiszki"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      fontSize: 12
-    },
-    onClick: function onClick() {
-      return setStarted(false);
-    }
-  }, "\u2715 Zako\u0144cz")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      marginBottom: 12
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginBottom: 6,
-      fontSize: 12,
-      color: 'var(--muted)'
-    }
-  }, /*#__PURE__*/React.createElement("span", null, idx + 1, " / ", deck.length), /*#__PURE__*/React.createElement("span", null, "\u2705 ", results.filter(function (r) {
-    return r === 'ok';
-  }).length, " \xA0 \u274C ", results.filter(function (r) {
-    return r === 'nok';
-  }).length)), /*#__PURE__*/React.createElement(ProgressBar, {
-    value: Math.round(idx / deck.length * 100),
-    color: "var(--eng)",
-    height: 4
-  })), /*#__PURE__*/React.createElement("div", {
-    onClick: function onClick() {
-      return setFlipped(function (f) {
-        return !f;
-      });
-    },
-    className: "card fade-in",
-    style: {
-      minHeight: 200,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      cursor: 'pointer',
-      textAlign: 'center',
-      padding: '40px 24px',
-      marginBottom: 16,
-      background: flipped ? 'linear-gradient(135deg,var(--eng-dim),var(--surface))' : 'var(--surface)',
-      border: "1px solid ".concat(flipped ? 'var(--eng)' : 'var(--border)'),
-      transition: 'all .25s'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--muted)',
-      marginBottom: 12,
-      textTransform: 'uppercase',
-      letterSpacing: '.08em'
-    }
-  }, flipped ? mode === 'pl2en' ? '🇬🇧 Angielski' : '🇵🇱 Polski' : mode === 'pl2en' ? '🇵🇱 Polski' : '🇬🇧 Angielski'), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 28,
-      fontWeight: 700,
-      color: flipped ? 'var(--eng)' : 'var(--text)',
-      transition: 'color .25s'
-    }
-  }, flipped ? back : front), card && card.secName && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 11,
-      color: 'var(--muted)',
-      marginTop: 12
-    }
-  }, card.secName), !flipped && /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 12,
-      color: 'var(--muted)',
-      marginTop: 20,
-      opacity: .6
-    }
-  }, "Kliknij aby odkry\u0107 \u2192")), flipped ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 10
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    style: {
-      flex: 1,
-      padding: '14px',
-      background: 'rgba(239,68,68,.15)',
-      color: 'var(--math)',
-      border: '1px solid rgba(239,68,68,.3)',
-      fontSize: 15
-    },
-    onClick: function onClick() {
-      return answer(false);
-    }
-  }, "\u274C Nie wiedzia\u0142em"), /*#__PURE__*/React.createElement("button", {
-    className: "btn",
-    style: {
-      flex: 1,
-      padding: '14px',
-      background: 'rgba(34,197,94,.15)',
-      color: 'var(--green)',
-      border: '1px solid rgba(34,197,94,.3)',
-      fontSize: 15
-    },
-    onClick: function onClick() {
-      return answer(true);
-    }
-  }, "\u2705 Wiedzia\u0142em")) : /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      width: '100%',
-      padding: '12px'
-    },
-    onClick: function onClick() {
-      return setFlipped(true);
-    }
-  }, "Odkryj odpowied\u017A"));
-};
-
-/* ---------- QUIZ ANGIELSKI ---------- */
-var EngQuiz = function EngQuiz(_ref23) {
-  var data = _ref23.data,
-    onChange = _ref23.onChange;
-  var _React$useState47 = React.useState(data || []),
-    _React$useState48 = _slicedToArray(_React$useState47, 2),
-    questions = _React$useState48[0],
-    setQuestions = _React$useState48[1];
-  var _React$useState49 = React.useState('edit'),
-    _React$useState50 = _slicedToArray(_React$useState49, 2),
-    mode = _React$useState50[0],
-    setMode = _React$useState50[1]; // edit | test
-  var _React$useState51 = React.useState(0),
-    _React$useState52 = _slicedToArray(_React$useState51, 2),
-    qi = _React$useState52[0],
-    setQi = _React$useState52[1];
-  var _React$useState53 = React.useState(null),
-    _React$useState54 = _slicedToArray(_React$useState53, 2),
-    selected = _React$useState54[0],
-    setSelected = _React$useState54[1];
-  var _React$useState55 = React.useState(false),
-    _React$useState56 = _slicedToArray(_React$useState55, 2),
-    answered = _React$useState56[0],
-    setAnswered = _React$useState56[1];
-  var _React$useState57 = React.useState(0),
-    _React$useState58 = _slicedToArray(_React$useState57, 2),
-    score = _React$useState58[0],
-    setScore = _React$useState58[1];
-  var _React$useState59 = React.useState(false),
-    _React$useState60 = _slicedToArray(_React$useState59, 2),
-    done = _React$useState60[0],
-    setDone = _React$useState60[1];
-  var save = function save(qs) {
-    setQuestions(qs);
-    onChange(qs);
-  };
-  var addQ = function addQ() {
-    return save([].concat(_toConsumableArray(questions), [{
-      id: 'eq_' + Date.now(),
-      q: '',
-      opts: ['', '', '', ''],
-      ans: 0
-    }]));
-  };
-  var removeQ = function removeQ(id) {
-    return save(questions.filter(function (q) {
-      return q.id !== id;
-    }));
-  };
-  var updateQ = function updateQ(id, field, val) {
-    return save(questions.map(function (q) {
-      return q.id === id ? _objectSpread(_objectSpread({}, q), {}, _defineProperty({}, field, val)) : q;
-    }));
-  };
-  var updateOpt = function updateOpt(id, oi, val) {
-    return save(questions.map(function (q) {
-      return q.id === id ? _objectSpread(_objectSpread({}, q), {}, {
-        opts: q.opts.map(function (o, i) {
-          return i === oi ? val : o;
-        })
-      }) : q;
-    }));
-  };
-  var validQs = questions.filter(function (q) {
-    return q.q.trim() && q.opts.filter(function (o) {
-      return o.trim();
-    }).length >= 2;
-  });
-  var startTest = function startTest() {
-    if (validQs.length === 0) return;
-    setMode('test');
-    setQi(0);
-    setSelected(null);
-    setAnswered(false);
-    setScore(0);
-    setDone(false);
-  };
-  var handleAnswer = function handleAnswer(i) {
-    if (answered) return;
-    setSelected(i);
-    setAnswered(true);
-    if (i === validQs[qi].ans) setScore(function (s) {
-      return s + 1;
-    });
-  };
-  var next = function next() {
-    if (qi + 1 >= validQs.length) {
-      setDone(true);
-      return;
-    }
-    setQi(function (q) {
-      return q + 1;
-    });
-    setSelected(null);
-    setAnswered(false);
-  };
-  var pct = validQs.length ? Math.round(score / validQs.length * 100) : 0;
-  if (mode === 'test') {
-    if (done) return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
-      style: {
-        fontFamily: 'Syne',
-        fontSize: 18,
-        marginBottom: 16
-      }
-    }, "\uD83C\uDFAF Quiz \u2014 Wynik"), /*#__PURE__*/React.createElement("div", {
-      className: "card",
-      style: {
-        textAlign: 'center',
-        padding: '32px 20px'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 56,
-        marginBottom: 12
-      }
-    }, pct >= 80 ? '🏆' : pct >= 60 ? '👍' : '📚'), /*#__PURE__*/React.createElement("h2", {
-      style: {
-        fontFamily: 'Syne',
-        fontSize: 32,
-        marginBottom: 8
-      }
-    }, score, "/", validQs.length), /*#__PURE__*/React.createElement("p", {
-      style: {
-        color: 'var(--muted)',
-        marginBottom: 20
-      }
-    }, pct >= 80 ? 'Świetnie!' : pct >= 60 ? 'Nieźle, powtórz jeszcze raz.' : 'Trzeba powtórzyć!'), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginBottom: 24,
-        maxWidth: 320,
-        margin: '0 auto 24px'
-      }
-    }, /*#__PURE__*/React.createElement(ProgressBar, {
-      value: pct,
-      color: pct >= 80 ? 'var(--green)' : pct >= 60 ? 'var(--gold)' : 'var(--math)',
-      height: 10,
-      showLabel: true
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        gap: 8,
-        justifyContent: 'center'
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-ghost",
-      onClick: startTest
-    }, "\uD83D\uDD04 Spr\xF3buj ponownie"), /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-primary",
-      onClick: function onClick() {
-        return setMode('edit');
-      }
-    }, "\u270F\uFE0F Edytuj quiz"))));
-    var cur = validQs[qi];
-    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 16
-      }
-    }, /*#__PURE__*/React.createElement("h3", {
-      style: {
-        fontFamily: 'Syne',
-        fontSize: 18
-      }
-    }, "\uD83C\uDFAF Quiz"), /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-ghost",
-      style: {
-        fontSize: 12
-      },
-      onClick: function onClick() {
-        return setMode('edit');
-      }
-    }, "\u2715 Zako\u0144cz")), /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginBottom: 12,
-        fontSize: 12,
-        color: 'var(--muted)',
-        display: 'flex',
-        justifyContent: 'space-between'
-      }
-    }, /*#__PURE__*/React.createElement("span", null, "Pytanie ", qi + 1, "/", validQs.length), /*#__PURE__*/React.createElement("span", null, "Wynik: ", score)), /*#__PURE__*/React.createElement(ProgressBar, {
-      value: Math.round(qi / validQs.length * 100),
-      color: "var(--eng)",
-      height: 4
-    }), /*#__PURE__*/React.createElement("p", {
-      style: {
-        margin: '20px 0 16px',
-        fontSize: 15,
-        fontWeight: 500,
-        lineHeight: 1.5
-      }
-    }, cur.q), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 8,
-        marginBottom: 16
-      }
-    }, cur.opts.filter(function (o) {
-      return o.trim();
-    }).map(function (opt, i) {
-      var cls = 'quiz-option';
-      if (answered) {
-        if (i === cur.ans) cls += ' correct';else if (i === selected) cls += ' wrong';
-      }
-      return /*#__PURE__*/React.createElement("div", {
-        key: i,
-        className: cls,
-        onClick: function onClick() {
-          return handleAnswer(i);
-        }
-      }, /*#__PURE__*/React.createElement("span", {
-        style: {
-          color: 'var(--muted)',
-          marginRight: 8,
-          fontFamily: 'JetBrains Mono',
-          fontSize: 12
-        }
-      }, String.fromCharCode(65 + i), "."), opt);
-    })), answered && /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'flex-end'
-      }
-    }, /*#__PURE__*/React.createElement("button", {
-      className: "btn btn-primary",
-      onClick: next
-    }, qi + 1 >= validQs.length ? 'Zobacz wynik →' : 'Następne →')));
+  // SRS state
+  var _srs0 = useState(srsLoad()), srsData = _srs0[0], setSrsData = _srs0[1];
+  function updateSrs(wordId, rating) {
+    var updated = Object.assign({}, srsData);
+    updated[wordId] = srsUpdate(updated[wordId] || srsInit(wordId), rating);
+    setSrsData(updated); srsSave(updated);
   }
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16
+  function resetSrs() {
+    if (!window.confirm('Na pewno zresetować postęp wszystkich fiszek?')) return;
+    setSrsData({}); srsSave({});
+  }
+
+  // UI state
+  var _m0 = useState('menu'), phase = _m0[0], setPhase = _m0[1]; // menu|flashcard|typing|result
+  var _m1 = useState('pl2en'), direction = _m1[0], setDirection = _m1[1];
+  var _m2 = useState('all'), filterSec = _m2[0], setFilterSec = _m2[1];
+  var _m3 = useState('all'), filterStatus = _m3[0], setFilterStatus = _m3[1];
+  var _m4 = useState('flashcard'), studyMode = _m4[0], setStudyMode = _m4[1]; // flashcard|typing
+  var _m5 = useState('all'), deckType = _m5[0], setDeckType = _m5[1]; // all|due|new|hard
+  var _m6 = useState([]), deck = _m6[0], setDeck = _m6[1];
+  var _m7 = useState(0), idx = _m7[0], setIdx = _m7[1];
+  var _m8 = useState(false), flipped = _m8[0], setFlipped = _m8[1];
+  var _m9 = useState([]), sessionResults = _m9[0], setSessionResults = _m9[1];
+  var _m10 = useState(''), typingAnswer = _m10[0], setTypingAnswer = _m10[1];
+  var _m11 = useState(null), typingResult = _m11[0], setTypingResult = _m11[1]; // null|'ok'|'err'
+  var _m12 = useState('stats'), menuTab = _m12[0], setMenuTab = _m12[1]; // settings|stats
+  var typingRef = useRef(null);
+
+  // Stats
+  var stats = React.useMemo(function() {
+    var total = allWords.length;
+    var newC=0, learning=0, known=0, due=0;
+    allWords.forEach(function(w) {
+      var c = srsData[w.id];
+      var st = srsGetStatus(c);
+      if (st==='new') newC++;
+      else if (st==='orange') learning++;
+      else known++;
+      if (srsDue(c)) due++;
+    });
+    return {total, new:newC, learning, known, due};
+  }, [allWords, srsData]);
+
+  // Build deck
+  function buildDeck() {
+    var pool = allWords.filter(function(w) {
+      if (filterSec !== 'all' && w.secId !== filterSec) return false;
+      var c = srsData[w.id];
+      var st = srsGetStatus(c);
+      if (filterStatus === 'red' && st !== 'red') return false;
+      if (filterStatus === 'orange' && st !== 'orange') return false;
+      if (filterStatus === 'green' && st !== 'green') return false;
+      if (filterStatus === 'new' && st !== 'new') return false;
+      if (deckType === 'due' && !srsDue(c)) return false;
+      if (deckType === 'new' && st !== 'new') return false;
+      if (deckType === 'hard' && (st === 'green' || st === 'new')) return false;
+      return true;
+    });
+    // SRS sort: due first, then by ef ascending (harder first)
+    pool.sort(function(a,b) {
+      var ca = srsData[a.id], cb = srsData[b.id];
+      var da = srsDue(ca), db = srsDue(cb);
+      if (da && !db) return -1; if (!da && db) return 1;
+      return (ca?ca.ef:2.5) - (cb?cb.ef:2.5);
+    });
+    return pool;
+  }
+
+  function startSession() {
+    var d = buildDeck().sort(function(){ return Math.random()-.5; });
+    setDeck(d); setIdx(0); setFlipped(false); setSessionResults([]);
+    setTypingAnswer(''); setTypingResult(null);
+    setPhase(studyMode);
+    if (studyMode==='typing') setTimeout(function(){ if(typingRef.current) typingRef.current.focus(); },150);
+  }
+
+  function rateCard(rating) {
+    var w = deck[idx];
+    updateSrs(w.id, rating);
+    var res = sessionResults.concat([{w:w, rating:rating}]);
+    setSessionResults(res);
+    if (idx+1 >= deck.length) { setPhase('result'); return; }
+    setIdx(idx+1); setFlipped(false);
+    setTypingAnswer(''); setTypingResult(null);
+  }
+
+  function checkTyping() {
+    var w = deck[idx];
+    var correct = direction==='pl2en' ? w.en : w.pl;
+    var input = typingAnswer.trim().toLowerCase();
+    var expected = correct.trim().toLowerCase();
+    var ok = input === expected || expected.includes(input) && input.length >= expected.length-2;
+    setTypingResult(ok ? 'ok' : 'err');
+    setFlipped(true);
+  }
+
+  function handleTypingKey(e) {
+    if (e.key==='Enter') {
+      if (!flipped) checkTyping();
+      else if (typingResult==='ok') rateCard(3);
+      else rateCard(0);
     }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18
-    }
-  }, "\uD83C\uDFAF Quiz"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8
-    }
-  }, validQs.length > 0 && /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    onClick: startTest
-  }, "\u25B6 Start (", validQs.length, " pyt.)"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      fontSize: 12
-    },
-    onClick: addQ
-  }, /*#__PURE__*/React.createElement(Icon, {
-    name: "plus",
-    size: 13
-  }), " Dodaj pytanie"))), questions.length === 0 && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: 'var(--muted)',
-      fontSize: 13,
-      padding: '20px 0'
-    }
-  }, "Brak pyta\u0144. Dodaj pierwsze!"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: 12
-    }
-  }, questions.map(function (q, qi2) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: q.id,
-      style: {
-        padding: 14,
-        borderRadius: 12,
-        background: 'var(--surface2)',
-        border: '1px solid var(--border)'
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        marginBottom: 10
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 12,
-        color: 'var(--muted)',
-        fontWeight: 600
-      }
-    }, "Pytanie ", qi2 + 1), /*#__PURE__*/React.createElement("button", {
-      style: {
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        color: 'var(--muted)',
-        fontSize: 12
-      },
-      onClick: function onClick() {
-        return removeQ(q.id);
-      }
-    }, "\u2715 usu\u0144")), /*#__PURE__*/React.createElement("input", {
-      value: q.q,
-      onChange: function onChange(e) {
-        return updateQ(q.id, 'q', e.target.value);
-      },
-      placeholder: "Tre\u015B\u0107 pytania...",
-      style: {
-        marginBottom: 10
-      }
-    }), /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 6
-      }
-    }, q.opts.map(function (opt, oi) {
-      return /*#__PURE__*/React.createElement("div", {
-        key: oi,
-        style: {
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        onClick: function onClick() {
-          return updateQ(q.id, 'ans', oi);
-        },
-        style: {
-          width: 18,
-          height: 18,
-          borderRadius: '50%',
-          border: "2px solid ".concat(q.ans === oi ? 'var(--green)' : 'var(--border)'),
-          background: q.ans === oi ? 'var(--green)' : 'transparent',
-          cursor: 'pointer',
-          flexShrink: 0,
-          transition: 'all .15s'
-        }
-      }), /*#__PURE__*/React.createElement("input", {
-        value: opt,
-        onChange: function onChange(e) {
-          return updateOpt(q.id, oi, e.target.value);
-        },
-        placeholder: "Odpowied\u017A ".concat(String.fromCharCode(65 + oi)).concat(oi === 0 ? ' (kółko = poprawna)' : ''),
-        style: {
-          fontSize: 12
-        }
-      }));
-    })), /*#__PURE__*/React.createElement("div", {
-      style: {
-        fontSize: 10,
-        color: 'var(--green)',
-        marginTop: 6
-      }
-    }, "\u25CF zaznaczone k\xF3\u0142ko = poprawna odpowied\u017A"));
-  })));
+  }
+
+  if (allWords.length===0) return React.createElement('div',{style:{textAlign:'center',padding:'40px 0',color:'var(--muted)'}},
+    React.createElement('div',{style:{fontSize:48,marginBottom:12}},'🃏'),
+    React.createElement('p',null,'Najpierw dodaj słówka w zakładce ',React.createElement('strong',null,'Słowa'),'!')
+  );
+
+  // ── MENU ──
+  if (phase==='menu') {
+    var statCards = [
+      {label:'Wszystkie',val:stats.total,color:'var(--eng)'},
+      {label:'Nowe',val:stats.new,color:'#6b7280'},
+      {label:'W nauce',val:stats.learning,color:'#f97316'},
+      {label:'Opanowane',val:stats.known,color:'#22c55e'},
+      {label:'Do powtórki',val:stats.due,color:'#ef4444'},
+    ];
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20,borderBottom:'1px solid var(--border)',paddingBottom:0}},
+        [{id:'settings',label:'Ustawienia',emoji:'⚙️'},{id:'stats',label:'Statystyki',emoji:'📊'}].map(function(t) {
+          var active=menuTab===t.id;
+          return React.createElement('button',{key:t.id,onClick:function(){setMenuTab(t.id);},style:{
+            padding:'8px 16px',border:'none',background:'none',cursor:'pointer',fontFamily:'Outfit,sans-serif',
+            fontSize:13,fontWeight:active?600:400,color:active?'var(--eng)':'var(--muted)',
+            borderBottom:active?'2px solid var(--eng)':'2px solid transparent',transition:'all .15s',marginBottom:-1
+          }},t.emoji+' '+t.label);
+        })
+      ),
+      menuTab==='stats' && React.createElement('div',null,
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:8,marginBottom:20}},
+          statCards.map(function(s) {
+            return React.createElement('div',{key:s.label,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'12px 10px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:22,fontWeight:700,color:s.color,fontFamily:'Syne,sans-serif'}},(s.val||0)),
+              React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:4}},(s.label))
+            );
+          })
+        ),
+        React.createElement('div',{style:{marginBottom:16}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Postęp wg działu'),
+          sections.map(function(sec) {
+            var secWords = allWords.filter(function(w){return w.secId===sec.id;});
+            var known2 = secWords.filter(function(w){ return srsGetStatus(srsData[w.id])==='green'; }).length;
+            var pct2 = secWords.length ? Math.round(known2/secWords.length*100) : 0;
+            return React.createElement('div',{key:sec.id,style:{marginBottom:8}},
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}},
+                React.createElement('span',{style:{color:'var(--text)'}},(sec.name)),
+                React.createElement('span',{style:{color:'var(--muted)'}},(known2)+'/'+secWords.length)
+              ),
+              React.createElement('div',{style:{height:5,background:'var(--surface3)',borderRadius:3}},
+                React.createElement('div',{style:{height:5,width:pct2+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
+              )
+            );
+          })
+        ),
+        React.createElement('button',{onClick:resetSrs,style:{fontSize:11,color:'var(--muted)',background:'none',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px',cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Resetuj cały postęp SRS')
+      ),
+      menuTab==='settings' && React.createElement('div',null,
+        React.createElement('div',{style:{marginBottom:14}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Tryb nauki'),
+          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+            [{id:'flashcard',label:'🃏 Fiszki (kliknij i oceń)',desc:'Odkryj odpowiedź, oceń się sam'},{id:'typing',label:'⌨️ Wpisywanie',desc:'Wpisz odpowiedź z klawiatury'}].map(function(m) {
+              var a=studyMode===m.id;
+              return React.createElement('button',{key:m.id,onClick:function(){setStudyMode(m.id);},style:{
+                padding:'10px 14px',borderRadius:10,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+                background:a?'rgba(59,130,246,.13)':'var(--surface2)',cursor:'pointer',textAlign:'left',
+                fontFamily:'Outfit,sans-serif',flex:1,minWidth:140
+              }},
+                React.createElement('div',{style:{fontSize:13,fontWeight:600,color:a?'var(--eng)':'var(--text)'}},(m.label)),
+                React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:3}},(m.desc))
+              );
+            })
+          )
+        ),
+        React.createElement('div',{style:{marginBottom:14}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Kierunek'),
+          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+            [{id:'pl2en',label:'🇵🇱 → 🇬🇧 PL→EN'},{id:'en2pl',label:'🇬🇧 → 🇵🇱 EN→PL'},{id:'random',label:'🔀 Losowo'}].map(function(d) {
+              var a=direction===d.id;
+              return React.createElement('button',{key:d.id,onClick:function(){setDirection(d.id);},style:{
+                padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+                background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+                cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
+              }},(d.label));
+            })
+          )
+        ),
+        React.createElement('div',{style:{marginBottom:14}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
+          React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+            [{id:'all',label:'Wszystkie'},{id:'due',label:'Do powtórki ('+stats.due+')'},{id:'new',label:'Nowe ('+stats.new+')'},{id:'hard',label:'Trudne'}].map(function(d) {
+              var a=deckType===d.id;
+              return React.createElement('button',{key:d.id,onClick:function(){setDeckType(d.id);},style:{
+                padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+                background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+                cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
+              }},(d.label));
+            })
+          )
+        ),
+        sections.length>1 && React.createElement('div',{style:{marginBottom:14}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Dział'),
+          React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+            React.createElement('button',{onClick:function(){setFilterSec('all');},style:{
+              padding:'5px 12px',borderRadius:8,border:'1px solid '+(filterSec==='all'?'var(--eng)':'var(--border)'),
+              background:filterSec==='all'?'rgba(59,130,246,.13)':'transparent',color:filterSec==='all'?'var(--eng)':'var(--muted)',
+              cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+            }},'Wszystkie ('+allWords.length+')'),
+            sections.map(function(sec) {
+              var cnt=(sec.words||[]).filter(function(w){return w.pl&&w.en;}).length;
+              var a=filterSec===sec.id;
+              return React.createElement('button',{key:sec.id,onClick:function(){setFilterSec(sec.id);},style:{
+                padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+                background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+                cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+              }},(sec.name)+' ('+cnt+')');
+            })
+          )
+        ),
+        React.createElement('div',{style:{marginBottom:20}},
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Filtr statusu'),
+          React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+            [{id:'all',label:'Wszystkie',c:'var(--eng)'},{id:'new',label:'Nowe',c:'#6b7280'},{id:'red',label:'Trudne',c:'#ef4444'},{id:'orange',label:'W nauce',c:'#f97316'},{id:'green',label:'Opanowane',c:'#22c55e'}].map(function(f) {
+              var a=filterStatus===f.id;
+              return React.createElement('button',{key:f.id,onClick:function(){setFilterStatus(f.id);},style:{
+                padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?f.c:'var(--border)'),
+                background:a?(f.c+'22'):'transparent',color:a?f.c:'var(--muted)',
+                cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+              }},(f.label));
+            })
+          )
+        ),
+        React.createElement('button',{onClick:startSession,style:{
+          background:'var(--eng)',color:'#fff',border:'none',padding:'13px',borderRadius:12,
+          fontSize:15,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Outfit,sans-serif'
+        }},'▶ Start – '+buildDeck().length+' słówek')
+      )
+    );
+  }
+
+  // ── FLASHCARD phase ──
+  if (phase==='flashcard') {
+    var w = deck[idx];
+    var dir = direction==='random' ? (idx%2===0?'pl2en':'en2pl') : direction;
+    var front = dir==='pl2en' ? w.pl : w.en;
+    var back = dir==='pl2en' ? w.en : w.pl;
+    var c = srsData[w.id];
+    var st = srsGetStatus(c);
+    var stColor = st==='green'?'#22c55e':st==='orange'?'#f97316':st==='red'?'#ef4444':'#6b7280';
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+        React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length),
+        React.createElement('span',{style:{fontSize:11,color:stColor,background:stColor+'22',padding:'2px 8px',borderRadius:10}},
+          st==='new'?'Nowe':st==='green'?'Opanowane':st==='orange'?'W nauce':'Trudne'
+        ),
+        React.createElement('button',{onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}},'✕')
+      ),
+      React.createElement('div',{style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:20}},
+        React.createElement('div',{style:{height:4,width:Math.round(idx/deck.length*100)+'%',background:'var(--eng)',borderRadius:2,transition:'width .3s'}})
+      ),
+      React.createElement('div',{onClick:function(){setFlipped(function(f){return !f;});},style:{
+        minHeight:180,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        cursor:'pointer',textAlign:'center',padding:'36px 24px',marginBottom:16,borderRadius:16,
+        background:flipped?'linear-gradient(135deg,var(--eng-dim),var(--surface))':'var(--surface2)',
+        border:'1px solid '+(flipped?'var(--eng)':'var(--border)'),transition:'all .25s'
+      }},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.08em'}},
+          flipped?(dir==='pl2en'?'🇬🇧 Angielski':'🇵🇱 Polski'):(dir==='pl2en'?'🇵🇱 Polski':'🇬🇧 Angielski')
+        ),
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:26,fontWeight:700,color:flipped?'var(--eng)':'var(--text)',transition:'color .25s'}},(flipped?back:front)),
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:10}},(w.secName)),
+        !flipped && React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:16,opacity:.6}},'Kliknij aby odkryć →'),
+        flipped && c && c.totalReviews>0 && React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:12}},
+          'Powtarzane '+(c.totalReviews||0)+' razy · '+(Math.round((c.correct||0)/(c.totalReviews||1)*100))+'% dobrych'
+        )
+      ),
+      flipped ? React.createElement('div',null,
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',textAlign:'center',marginBottom:8}},'Jak Ci poszło?'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}},
+          [{r:0,label:'Znowu',sub:'nie wiedziałem',c:'#ef4444'},{r:1,label:'Trudne',sub:'z błędem',c:'#f97316'},{r:2,label:'Dobre',sub:'z wahaniem',c:'#3b82f6'},{r:3,label:'Łatwe',sub:'od razu',c:'#22c55e'}].map(function(btn) {
+            return React.createElement('button',{key:btn.r,onClick:function(){rateCard(btn.r);},style:{
+              background:btn.c+'22',border:'1px solid '+btn.c+'55',borderRadius:10,padding:'10px 6px',
+              cursor:'pointer',fontFamily:'Outfit,sans-serif',transition:'all .15s'
+            }},
+              React.createElement('div',{style:{fontWeight:600,color:btn.c,fontSize:13}},(btn.label)),
+              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',marginTop:2}},(btn.sub))
+            );
+          })
+        )
+      ) : React.createElement('button',{onClick:function(){setFlipped(true);},style:{
+        width:'100%',padding:'12px',borderRadius:10,border:'1px solid var(--border)',
+        background:'var(--surface2)',color:'var(--text)',cursor:'pointer',fontSize:14,fontFamily:'Outfit,sans-serif'
+      }},'Odkryj odpowiedź')
+    );
+  }
+
+  // ── TYPING phase ──
+  if (phase==='typing') {
+    var wt = deck[idx];
+    var dirt = direction==='random' ? (idx%2===0?'pl2en':'en2pl') : direction;
+    var frontt = dirt==='pl2en' ? wt.pl : wt.en;
+    var backt = dirt==='pl2en' ? wt.en : wt.pl;
+    var ct = srsData[wt.id];
+    var stColor2 = srsGetStatus(ct)==='green'?'#22c55e':srsGetStatus(ct)==='orange'?'#f97316':'#ef4444';
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+        React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length+' · ⌨️ Wpisywanie'),
+        React.createElement('button',{onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}},'✕')
+      ),
+      React.createElement('div',{style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:20}},
+        React.createElement('div',{style:{height:4,width:Math.round(idx/deck.length*100)+'%',background:'var(--eng)',borderRadius:2,transition:'width .3s'}})
+      ),
+      React.createElement('div',{style:{minHeight:120,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',textAlign:'center',padding:'28px 24px',marginBottom:16,borderRadius:16,background:'var(--surface2)',border:'1px solid var(--border)'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.08em'}},
+          dirt==='pl2en'?'🇵🇱 Polski → przetłumacz na angielski':'🇬🇧 Angielski → przetłumacz na polski'
+        ),
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:700,color:'var(--text)'}},(frontt)),
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:8}},(wt.secName))
+      ),
+      !flipped && React.createElement('div',{style:{display:'flex',gap:8,marginBottom:12}},
+        React.createElement('input',{
+          ref:typingRef, type:'text', value:typingAnswer,
+          onChange:function(e){setTypingAnswer(e.target.value);},
+          onKeyDown:handleTypingKey, placeholder:'Wpisz odpowiedź...',
+          style:{flex:1,padding:'12px 14px',borderRadius:10,border:'1px solid var(--border)',
+            background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'Outfit,sans-serif'}
+        }),
+        React.createElement('button',{onClick:checkTyping,disabled:!typingAnswer.trim(),style:{
+          background:typingAnswer.trim()?'var(--eng)':'var(--surface3)',color:typingAnswer.trim()?'#fff':'var(--muted)',
+          border:'none',padding:'0 20px',borderRadius:10,cursor:typingAnswer.trim()?'pointer':'not-allowed',fontFamily:'Outfit,sans-serif',fontWeight:600
+        }},'Sprawdź')
+      ),
+      flipped && React.createElement('div',null,
+        React.createElement('div',{style:{padding:'14px 16px',borderRadius:10,marginBottom:12,
+          background:typingResult==='ok'?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)',
+          border:'1px solid '+(typingResult==='ok'?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)')
+        }},
+          React.createElement('div',{style:{fontWeight:600,color:typingResult==='ok'?'#22c55e':'#ef4444',marginBottom:4}},
+            typingResult==='ok'?'✓ Dobrze!':'✗ Błąd!'
+          ),
+          React.createElement('div',{style:{fontSize:14,color:'var(--text)'}},'Poprawna odpowiedź: ',React.createElement('strong',null,(backt))),
+          typingResult==='err' && React.createElement('div',{style:{fontSize:13,color:'var(--muted)',marginTop:4}},'Twoja odpowiedź: '+(typingAnswer||'(brak)'))
+        ),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:function(){rateCard(typingResult==='ok'?3:0);},style:{
+            flex:1,padding:'11px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:600,fontFamily:'Outfit,sans-serif',
+            background:typingResult==='ok'?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)',
+            color:typingResult==='ok'?'#22c55e':'#ef4444'
+          }},typingResult==='ok'?'Dalej →':'Powtórz →'),
+          typingResult==='err' && React.createElement('button',{onClick:function(){rateCard(2);},style:{
+            padding:'11px 16px',borderRadius:10,border:'1px solid var(--border)',background:'var(--surface2)',
+            color:'var(--muted)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
+          }},'Znam, literówka')
+        )
+      )
+    );
+  }
+
+  // ── RESULT ──
+  if (phase==='result') {
+    var correct = sessionResults.filter(function(r){return r.rating>=2;}).length;
+    var pctR = sessionResults.length ? Math.round(correct/sessionResults.length*100) : 0;
+    var ratingLabels = ['Znowu','Trudne','Dobre','Łatwe'];
+    var ratingColors = ['#ef4444','#f97316','#3b82f6','#22c55e'];
+    return React.createElement('div',null,
+      React.createElement('div',{style:{textAlign:'center',marginBottom:24}},
+        React.createElement('div',{style:{fontSize:52,fontWeight:800,fontFamily:'Syne,sans-serif',color:pctR>=80?'#22c55e':pctR>=50?'#f59e0b':'#ef4444'}},(pctR)+'%'),
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:14,marginTop:4}},(correct)+' / '+sessionResults.length+' opanowanych')
+      ),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20}},
+        React.createElement('button',{onClick:startSession,style:{flex:1,background:'var(--eng)',color:'#fff',border:'none',padding:'11px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Jeszcze raz'),
+        React.createElement('button',{onClick:function(){setPhase('menu');setMenuTab('settings');},style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Zmień ustawienia')
+      ),
+      React.createElement('div',{style:{borderTop:'1px solid var(--border)',paddingTop:16}},
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:12,marginBottom:10}},'Wyniki sesji:'),
+        sessionResults.map(function(r,i) {
+          var rCol = ratingColors[r.rating];
+          return React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 10px',borderRadius:8,marginBottom:4,background:'var(--surface2)'}},
+            React.createElement('span',{style:{fontSize:13,color:'var(--text)'}},(r.w.pl)+' → '+(r.w.en)),
+            React.createElement('span',{style:{fontSize:11,color:rCol,background:rCol+'22',padding:'2px 8px',borderRadius:8}},(ratingLabels[r.rating]))
+          );
+        })
+      )
+    );
+  }
+  return null;
 };
+
+/* ---------- QUIZ SŁÓWEK – NOWY ─────────────────────────────────────────────── */
+var EngQuiz = function EngQuiz(_ref23) {
+  var data = _ref23.data, onChange = _ref23.onChange, wordsData = _ref23.wordsData;
+
+  // wordsData przekazane z EnglishView (do generowania quizu ze słówek)
+  var allWords = React.useMemo(function() {
+    var out = [];
+    (wordsData||[]).forEach(function(sec) {
+      (sec.words||[]).forEach(function(w) {
+        if (w.pl&&w.en) out.push({pl:w.pl,en:w.en,secName:sec.name,secId:sec.id,id:w.id||w.pl});
+      });
+    });
+    return out;
+  }, [wordsData]);
+
+  var _q0 = useState('menu'), qPhase = _q0[0], setQPhase = _q0[1]; // menu|quiz|result
+  var _q1 = useState('multi'), qMode = _q1[0], setQMode = _q1[1]; // multi|typing|mixed
+  var _q2 = useState('pl2en'), qDir = _q2[0], setQDir = _q2[1];
+  var _q3 = useState('all'), qSec = _q3[0], setQSec = _q3[1];
+  var _q4 = useState(10), qCount = _q4[0], setQCount = _q4[1];
+  var _q5 = useState([]), qDeck = _q5[0], setQDeck = _q5[1];
+  var _q6 = useState(0), qIdx = _q6[0], setQIdx = _q6[1];
+  var _q7 = useState(null), qSelected = _q7[0], setQSelected = _q7[1];
+  var _q8 = useState(false), qAnswered = _q8[0], setQAnswered = _q8[1];
+  var _q9 = useState([]), qResults = _q9[0], setQResults = _q9[1];
+  var _q10 = useState(''), qTyping = _q10[0], setQTyping = _q10[1];
+  var _q11 = useState(null), qTypingResult = _q11[0], setQTypingResult = _q11[1];
+  var qInputRef = useRef(null);
+
+  var sections = React.useMemo(function() {
+    return (wordsData||[]).filter(function(s){ return s.words&&s.words.some(function(w){return w.pl&&w.en;}); });
+  }, [wordsData]);
+
+  function buildQuizDeck() {
+    var pool = qSec==='all' ? allWords : allWords.filter(function(w){return w.secId===qSec;});
+    pool = pool.sort(function(){return Math.random()-.5;}).slice(0, qCount);
+    return pool.map(function(w) {
+      var isTyping = qMode==='typing' || (qMode==='mixed' && Math.random()>.5);
+      var dir = qDir==='random'?(Math.random()>.5?'pl2en':'en2pl'):qDir;
+      var question = dir==='pl2en'?w.pl:w.en;
+      var correct = dir==='pl2en'?w.en:w.pl;
+      // Generuj dystraktorów
+      var others = pool.filter(function(x){return x.id!==w.id;}).sort(function(){return Math.random()-.5;}).slice(0,3);
+      var opts = [correct].concat(others.map(function(x){return dir==='pl2en'?x.en:x.pl;})).sort(function(){return Math.random()-.5;});
+      return { w, question, correct, opts, correctIdx:opts.indexOf(correct), dir, typing:isTyping };
+    });
+  }
+
+  function startQuiz() {
+    var d = buildQuizDeck();
+    setQDeck(d); setQIdx(0); setQSelected(null); setQAnswered(false); setQResults([]);
+    setQTyping(''); setQTypingResult(null); setQPhase('quiz');
+    if (d[0]&&d[0].typing) setTimeout(function(){ if(qInputRef.current) qInputRef.current.focus(); },150);
+  }
+
+  function handleMulti(i) {
+    if (qAnswered) return;
+    setQSelected(i); setQAnswered(true);
+    var cur = qDeck[qIdx];
+    setQResults(qResults.concat([{w:cur.w, question:cur.question, correct:cur.correct, given:cur.opts[i], ok:i===cur.correctIdx, typing:false}]));
+  }
+
+  function checkTypingQuiz() {
+    var cur = qDeck[qIdx];
+    var input = qTyping.trim().toLowerCase();
+    var exp = cur.correct.trim().toLowerCase();
+    var ok = input===exp || (exp.includes(input)&&input.length>=exp.length-2);
+    setQTypingResult(ok?'ok':'err'); setQAnswered(true);
+    setQResults(qResults.concat([{w:cur.w, question:cur.question, correct:cur.correct, given:qTyping, ok, typing:true}]));
+  }
+
+  function nextQ() {
+    if (qIdx+1>=qDeck.length) { setQPhase('result'); return; }
+    setQIdx(qIdx+1); setQSelected(null); setQAnswered(false); setQTyping(''); setQTypingResult(null);
+    var next = qDeck[qIdx+1];
+    if (next&&next.typing) setTimeout(function(){ if(qInputRef.current) qInputRef.current.focus(); },100);
+  }
+
+  function handleTypingKey(e) {
+    if (e.key==='Enter') { if (!qAnswered) checkTypingQuiz(); else nextQ(); }
+  }
+
+  if (qPhase==='menu') {
+    var pool2 = qSec==='all' ? allWords : allWords.filter(function(w){return w.secId===qSec;});
+    return React.createElement('div',null,
+      React.createElement('h3',{style:{fontFamily:'Syne,sans-serif',fontSize:18,marginBottom:4}},'🎯 Quiz słówek'),
+      React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:20}},'Quiz generowany automatycznie z Twoich słówek. Wybierz ustawienia.'),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Tryb odpowiedzi'),
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}},
+          [{id:'multi',label:'🔘 Wielokrotny wybór',desc:'4 opcje do wyboru'},{id:'typing',label:'⌨️ Wpisywanie',desc:'Wpisz z klawiatury'},{id:'mixed',label:'🔀 Mieszany',desc:'Losowo oba typy'}].map(function(m) {
+            var a=qMode===m.id;
+            return React.createElement('button',{key:m.id,onClick:function(){setQMode(m.id);},style:{
+              padding:'10px 10px',borderRadius:10,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+              background:a?'rgba(59,130,246,.13)':'var(--surface2)',cursor:'pointer',textAlign:'left',fontFamily:'Outfit,sans-serif'
+            }},
+              React.createElement('div',{style:{fontSize:12,fontWeight:600,color:a?'var(--eng)':'var(--text)'}},(m.label)),
+              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',marginTop:2}},(m.desc))
+            );
+          })
+        )
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Kierunek'),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+          [{id:'pl2en',label:'🇵🇱→🇬🇧 PL→EN'},{id:'en2pl',label:'🇬🇧→🇵🇱 EN→PL'},{id:'random',label:'🔀 Losowo'}].map(function(d) {
+            var a=qDir===d.id;
+            return React.createElement('button',{key:d.id,onClick:function(){setQDir(d.id);},style:{
+              padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+              background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+              cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
+            }},(d.label));
+          })
+        )
+      ),
+      sections.length>1 && React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Dział'),
+        React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
+          React.createElement('button',{onClick:function(){setQSec('all');},style:{
+            padding:'5px 12px',borderRadius:8,border:'1px solid '+(qSec==='all'?'var(--eng)':'var(--border)'),
+            background:qSec==='all'?'rgba(59,130,246,.13)':'transparent',color:qSec==='all'?'var(--eng)':'var(--muted)',
+            cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+          }},'Wszystkie'),
+          sections.map(function(s) {
+            var a=qSec===s.id;
+            return React.createElement('button',{key:s.id,onClick:function(){setQSec(s.id);},style:{
+              padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+              background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+              cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+            }},(s.name));
+          })
+        )
+      ),
+      React.createElement('div',{style:{marginBottom:20}},
+        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
+          React.createElement('span',{style:{fontSize:12,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Liczba pytań'),
+          React.createElement('span',{style:{color:'var(--eng)',fontWeight:600,fontSize:13}},(qCount)+' / '+pool2.length+' dostępnych')
+        ),
+        React.createElement('input',{type:'range',min:5,max:Math.min(50,pool2.length),step:5,value:Math.min(qCount,pool2.length),
+          onChange:function(e){setQCount(Number(e.target.value));},style:{width:'100%'}})
+      ),
+      React.createElement('button',{onClick:startQuiz,disabled:pool2.length<2,style:{
+        background:pool2.length>=2?'var(--eng)':'var(--surface3)',color:pool2.length>=2?'#fff':'var(--muted)',
+        border:'none',padding:'13px',borderRadius:12,fontSize:15,fontWeight:600,cursor:pool2.length>=2?'pointer':'not-allowed',
+        width:'100%',fontFamily:'Outfit,sans-serif'
+      }},'▶ Start quizu')
+    );
+  }
+
+  if (qPhase==='quiz') {
+    var cur = qDeck[qIdx];
+    if (!cur) return null;
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
+        React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},'Pytanie '+(qIdx+1)+' / '+qDeck.length),
+        React.createElement('span',{style:{fontSize:11,color:'var(--muted)'}},(cur.typing?'⌨️ Wpisz':'🔘 Wybierz')),
+        React.createElement('button',{onClick:function(){setQPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}},'✕')
+      ),
+      React.createElement('div',{style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:20}},
+        React.createElement('div',{style:{height:4,width:Math.round(qIdx/qDeck.length*100)+'%',background:'var(--eng)',borderRadius:2,transition:'width .3s'}})
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'24px 20px',marginBottom:16,textAlign:'center'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:8}},
+          cur.dir==='pl2en'?'🇵🇱 Przetłumacz na angielski':'🇬🇧 Przetłumacz na polski'
+        ),
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:24,fontWeight:700,color:'var(--text)'}},(cur.question)),
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:6}},(cur.w.secName))
+      ),
+      cur.typing ? React.createElement('div',null,
+        !qAnswered && React.createElement('div',{style:{display:'flex',gap:8,marginBottom:12}},
+          React.createElement('input',{ref:qInputRef,type:'text',value:qTyping,
+            onChange:function(e){setQTyping(e.target.value);},onKeyDown:handleTypingKey,
+            placeholder:'Wpisz tłumaczenie...',
+            style:{flex:1,padding:'12px 14px',borderRadius:10,border:'1px solid var(--border)',
+              background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'Outfit,sans-serif'}
+          }),
+          React.createElement('button',{onClick:checkTypingQuiz,disabled:!qTyping.trim(),style:{
+            background:qTyping.trim()?'var(--eng)':'var(--surface3)',color:qTyping.trim()?'#fff':'var(--muted)',
+            border:'none',padding:'0 18px',borderRadius:10,cursor:qTyping.trim()?'pointer':'not-allowed',fontFamily:'Outfit,sans-serif',fontWeight:600
+          }},'OK')
+        ),
+        qAnswered && React.createElement('div',null,
+          React.createElement('div',{style:{padding:'12px 14px',borderRadius:10,marginBottom:12,
+            background:qTypingResult==='ok'?'rgba(34,197,94,.1)':'rgba(239,68,68,.1)',
+            border:'1px solid '+(qTypingResult==='ok'?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)')
+          }},
+            React.createElement('div',{style:{fontWeight:600,color:qTypingResult==='ok'?'#22c55e':'#ef4444',marginBottom:4}},
+              qTypingResult==='ok'?'✓ Poprawnie!':'✗ Błędna odpowiedź'
+            ),
+            React.createElement('div',{style:{fontSize:14,color:'var(--text)'}},'Poprawna: ',React.createElement('strong',null,(cur.correct))),
+            qTypingResult==='err' && React.createElement('div',{style:{fontSize:13,color:'var(--muted)',marginTop:4}},'Twoja: '+(qTyping||'(brak)'))
+          ),
+          React.createElement('button',{onClick:nextQ,style:{
+            width:'100%',padding:'12px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:600,
+            fontFamily:'Outfit,sans-serif',background:'var(--eng)',color:'#fff'
+          }},qIdx+1>=qDeck.length?'Zobacz wynik →':'Następne →')
+        )
+      ) : React.createElement('div',null,
+        React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8,marginBottom:16}},
+          cur.opts.map(function(opt,i) {
+            var isCorrect=i===cur.correctIdx, isSelected=i===qSelected;
+            var bg='var(--surface2)', border='var(--border)', color='var(--text)';
+            if (qAnswered) {
+              if (isCorrect) { bg='rgba(34,197,94,.13)'; border='rgba(34,197,94,.5)'; color='#22c55e'; }
+              else if (isSelected) { bg='rgba(239,68,68,.13)'; border='rgba(239,68,68,.5)'; color='#ef4444'; }
+            }
+            return React.createElement('button',{key:i,onClick:function(){handleMulti(i);},disabled:qAnswered,style:{
+              padding:'13px 16px',borderRadius:10,border:'1px solid '+border,background:bg,color:color,
+              cursor:qAnswered?'default':'pointer',textAlign:'left',fontFamily:'Outfit,sans-serif',fontSize:14,
+              display:'flex',alignItems:'center',gap:12,transition:'all .15s'
+            }},
+              React.createElement('span',{style:{width:22,height:22,borderRadius:'50%',border:'1px solid '+border,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,flexShrink:0,color:'var(--muted)',fontWeight:600}},(String.fromCharCode(65+i))),
+              (opt)
+            );
+          })
+        ),
+        qAnswered && React.createElement('button',{onClick:nextQ,style:{
+          width:'100%',padding:'12px',borderRadius:10,border:'none',cursor:'pointer',fontWeight:600,
+          fontFamily:'Outfit,sans-serif',background:'var(--eng)',color:'#fff'
+        }},qIdx+1>=qDeck.length?'Zobacz wynik →':'Następne →')
+      )
+    );
+  }
+
+  if (qPhase==='result') {
+    var correct2=qResults.filter(function(r){return r.ok;}).length;
+    var pct2=qResults.length?Math.round(correct2/qResults.length*100):0;
+    return React.createElement('div',null,
+      React.createElement('div',{style:{textAlign:'center',marginBottom:24}},
+        React.createElement('div',{style:{fontSize:52,fontWeight:800,fontFamily:'Syne,sans-serif',color:pct2>=80?'#22c55e':pct2>=60?'#f59e0b':'#ef4444'}},(pct2)+'%'),
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:14,marginTop:4}},(correct2)+' / '+qResults.length+' poprawnych'),
+        React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginTop:8}},pct2>=80?'Wyśmienicie!':pct2>=60?'Nieźle, powtórz błędy.':'Trzeba więcej ćwiczyć!')
+      ),
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20}},
+        React.createElement('button',{onClick:startQuiz,style:{flex:1,background:'var(--eng)',color:'#fff',border:'none',padding:'11px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Jeszcze raz'),
+        React.createElement('button',{onClick:function(){setQPhase('menu');},style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Zmień ustawienia')
+      ),
+      React.createElement('div',{style:{borderTop:'1px solid var(--border)',paddingTop:16}},
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:12,marginBottom:10}},'Szczegóły (błędne najpierw):'),
+        qResults.slice().sort(function(a,b){return a.ok-b.ok;}).map(function(r,i) {
+          return React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',borderRadius:8,marginBottom:4,
+            background:r.ok?'rgba(34,197,94,.06)':'rgba(239,68,68,.06)',
+            border:'1px solid '+(r.ok?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)')
+          }},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontSize:13,color:'var(--text)'}},(r.question)+' → ',React.createElement('strong',null,(r.correct))),
+              !r.ok&&r.typing&&React.createElement('div',{style:{fontSize:11,color:'var(--muted)'}},'Wpisałeś: '+(r.given||'(brak)'))
+            ),
+            React.createElement('span',{style:{fontSize:11,fontWeight:600,color:r.ok?'#22c55e':'#ef4444',flexShrink:0}},(r.ok?'✓ OK':'✗'))
+          );
+        })
+      )
+    );
+  }
+  return null;
+};
+
+
 
 /* ---------- IDIOMY ---------- */
 var EngIdioms = function EngIdioms(_ref24) {
@@ -9038,7 +8898,8 @@ var EnglishView = function EnglishView(_ref25) {
     data: eng.quiz || [],
     onChange: function onChange(v) {
       return updateEngData('quiz', v);
-    }
+    },
+    wordsData: eng.words
   }), tab === 'sentences' && /*#__PURE__*/React.createElement(EngSentences, {
     data: eng.sentences,
     onChange: function onChange(v) {
@@ -9092,6 +8953,311 @@ var EnglishView = function EnglishView(_ref25) {
       }
     }));
   })));
+};
+
+// ─── MATH WARMUP ──────────────────────────────────────────────────────────────
+
+var MathWarmup = function MathWarmup() {
+  var STORAGE_KEY = 'mathWarmupRecords';
+  var CATEGORIES = [
+    {id:'add', label:'Dodawanie', sym:'+'},
+    {id:'sub', label:'Odejmowanie', sym:'-'},
+    {id:'mul', label:'Mnożenie', sym:'×'},
+    {id:'div', label:'Dzielenie', sym:'÷'},
+    {id:'tab', label:'Tabliczka mnożenia', sym:'×'},
+  ];
+  var LEVELS = [
+    {val:5,label:'do 5'},
+    {val:10,label:'do 10'},
+    {val:20,label:'do 20'},
+    {val:50,label:'do 50'},
+    {val:100,label:'do 100'},
+  ];
+
+  var _s0 = useState('menu'), phase = _s0[0], setPhase = _s0[1];
+  var _s1 = useState('add'), cat = _s1[0], setCat = _s1[1];
+  var _s2 = useState(10), maxN = _s2[0], setMaxN = _s2[1];
+  var _s3 = useState(10), qCount = _s3[0], setQCount = _s3[1];
+  var _s4 = useState([]), questions = _s4[0], setQuestions = _s4[1];
+  var _s5 = useState(0), qIdx = _s5[0], setQIdx = _s5[1];
+  var _s6 = useState(''), answer = _s6[0], setAnswer = _s6[1];
+  var _s7 = useState([]), results = _s7[0], setResults = _s7[1];
+  var _s8 = useState(0), startTime = _s8[0], setStartTime = _s8[1];
+  var _s9 = useState(null), feedback = _s9[0], setFeedback = _s9[1];
+  var _s10 = useState(null), elapsed = _s10[0], setElapsed = _s10[1];
+  var inputRef = useRef(null);
+
+  function loadRecords() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function saveRecord(catId, level, score, total, time) {
+    var key = catId + '_' + level;
+    var recs = loadRecords();
+    var prev = recs[key];
+    var pct = Math.round(score/total*100);
+    if (!prev || pct > prev.pct || (pct === prev.pct && time < prev.time)) {
+      recs[key] = {pct, score, total, time: Math.round(time), date: new Date().toLocaleDateString('pl-PL')};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(recs));
+    }
+  }
+  function getRecord(catId, level) {
+    var key = catId + '_' + level;
+    return loadRecords()[key] || null;
+  }
+
+  function genQuestion(catId, max) {
+    var a, b, q, ans;
+    if (catId === 'tab') {
+      a = Math.floor(Math.random()*(max-1))+2;
+      b = Math.floor(Math.random()*9)+2;
+      q = a + ' × ' + b; ans = a*b;
+    } else if (catId === 'add') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*max)+1;
+      q = a + ' + ' + b; ans = a+b;
+    } else if (catId === 'sub') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*a)+1;
+      q = a + ' - ' + b; ans = a-b;
+    } else if (catId === 'mul') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*10)+1;
+      q = a + ' × ' + b; ans = a*b;
+    } else {
+      b = Math.floor(Math.random()*9)+2;
+      ans = Math.floor(Math.random()*Math.floor(max/b))+1;
+      a = ans*b;
+      q = a + ' ÷ ' + b;
+    }
+    return {q, ans};
+  }
+
+  function startGame() {
+    var qs = [];
+    for (var i=0; i<qCount; i++) qs.push(genQuestion(cat, maxN));
+    setQuestions(qs); setQIdx(0); setResults([]); setAnswer(''); setFeedback(null);
+    setStartTime(Date.now()); setPhase('game');
+    setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },100);
+  }
+
+  function submitAnswer() {
+    var num = parseInt(answer, 10);
+    var q = questions[qIdx];
+    var correct = num === q.ans;
+    setFeedback(correct ? 'ok' : 'err_' + q.ans);
+    var newResults = results.concat([{q: q.q, ans: q.ans, given: num, ok: correct}]);
+    setTimeout(function() {
+      setFeedback(null);
+      setAnswer('');
+      if (qIdx+1 >= questions.length) {
+        var t = (Date.now()-startTime)/1000;
+        setElapsed(t);
+        var score = newResults.filter(function(r){return r.ok;}).length;
+        saveRecord(cat, maxN, score, questions.length, t);
+        setResults(newResults); setPhase('result');
+      } else {
+        setResults(newResults); setQIdx(qIdx+1);
+        setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },50);
+      }
+    }, 700);
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && answer !== '') submitAnswer();
+  }
+
+  var catInfo = CATEGORIES.find(function(c){return c.id===cat;});
+  var rec = getRecord(cat, maxN);
+
+  if (phase === 'menu') return React.createElement('div', {style:{padding:'8px 0'}},
+    React.createElement('div', {style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}},
+      CATEGORIES.map(function(c) {
+        return React.createElement('button', {
+          key:c.id,
+          onClick:function(){setCat(c.id);},
+          style:{
+            padding:'8px 16px',borderRadius:20,border:'1px solid',cursor:'pointer',
+            fontFamily:'Outfit,sans-serif',fontSize:14,fontWeight:500,transition:'all .15s',
+            background: cat===c.id ? 'var(--math)' : 'var(--surface2)',
+            color: cat===c.id ? '#fff' : 'var(--text)',
+            borderColor: cat===c.id ? 'var(--math)' : 'var(--border)',
+          }
+        }, c.label);
+      })
+    ),
+    React.createElement('div', {style:{marginBottom:20}},
+      React.createElement('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
+        React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, cat==='tab'?'Zakres tabliczki mnożenia:':'Zakres liczb:'),
+        React.createElement('span', {style:{color:'var(--math)',fontWeight:600,fontSize:14}}, cat==='tab'?'do '+maxN+' × 9':('do '+maxN))
+      ),
+      React.createElement('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        LEVELS.map(function(l){
+          var r = getRecord(cat, l.val);
+          return React.createElement('button', {
+            key:l.val, onClick:function(){setMaxN(l.val);},
+            style:{
+              padding:'6px 14px',borderRadius:12,border:'1px solid',cursor:'pointer',
+              fontFamily:'Outfit,sans-serif',fontSize:13,transition:'all .15s',position:'relative',
+              background: maxN===l.val ? 'var(--math-dim)' : 'var(--surface2)',
+              color: maxN===l.val ? 'var(--math)' : 'var(--muted)',
+              borderColor: maxN===l.val ? 'var(--math)' : 'var(--border)',
+            }
+          },
+            l.label,
+            r ? React.createElement('span',{style:{display:'block',fontSize:10,color:'#22c55e',marginTop:1}},'Rekord: '+r.pct+'%') : null
+          );
+        })
+      )
+    ),
+    React.createElement('div', {style:{marginBottom:24}},
+      React.createElement('div', {style:{color:'var(--muted)',fontSize:13,marginBottom:8}}, 'Liczba pytań:'),
+      React.createElement('div', {style:{display:'flex',alignItems:'center',gap:12}},
+        React.createElement('input', {
+          type:'range', min:5, max:30, step:5, value:qCount,
+          onChange:function(e){setQCount(Number(e.target.value));},
+          style:{flex:1}
+        }),
+        React.createElement('span', {style:{color:'var(--math)',fontWeight:600,minWidth:32}}, qCount)
+      )
+    ),
+    rec && React.createElement('div', {style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'10px 16px',marginBottom:20,display:'flex',gap:20,flexWrap:'wrap'}},
+      React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, 'Rekord w tej kategorii:'),
+      React.createElement('span', {style:{color:'#22c55e',fontWeight:600,fontSize:13}}, rec.pct+'% ('+rec.score+'/'+rec.total+')'),
+      React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, rec.time+'s · '+rec.date)
+    ),
+    React.createElement('button', {
+      onClick:startGame,
+      style:{
+        background:'var(--math)',color:'#fff',border:'none',padding:'12px 32px',
+        borderRadius:12,fontSize:16,fontWeight:600,cursor:'pointer',width:'100%',
+        fontFamily:'Outfit,sans-serif',letterSpacing:'.5px'
+      }
+    }, 'START')
+  );
+
+  if (phase === 'game') {
+    var q = questions[qIdx];
+    var prog = Math.round((qIdx/questions.length)*100);
+    var fbColor = feedback === 'ok' ? '#22c55e' : feedback ? '#ef4444' : 'transparent';
+    return React.createElement('div', {style:{padding:'8px 0'}},
+      React.createElement('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+        React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, (qIdx+1)+' / '+questions.length),
+        React.createElement('span', {style:{color:'var(--math)',fontSize:13,fontWeight:600}}, catInfo.label+' · do '+maxN),
+        React.createElement('button', {onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}}, '✕ Przerwij')
+      ),
+      React.createElement('div', {style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:28}},
+        React.createElement('div', {style:{height:4,width:prog+'%',background:'var(--math)',borderRadius:2,transition:'width .3s'}})
+      ),
+      React.createElement('div', {
+        style:{
+          background:'var(--surface2)',border:'2px solid '+fbColor,borderRadius:16,
+          padding:'32px 24px',textAlign:'center',marginBottom:24,transition:'border-color .2s'
+        }
+      },
+        React.createElement('div', {style:{fontSize:48,fontWeight:700,fontFamily:'Syne,sans-serif',color:'var(--text)',letterSpacing:2}}, q.q+' = ?'),
+        feedback && feedback!=='ok' && React.createElement('div', {style:{marginTop:12,color:'#ef4444',fontSize:14}}, 'Błąd! Odpowiedź: '+q.ans),
+        feedback === 'ok' && React.createElement('div', {style:{marginTop:12,color:'#22c55e',fontSize:14}}, 'Dobrze!')
+      ),
+      React.createElement('div', {style:{display:'flex',gap:10}},
+        React.createElement('input', {
+          ref:inputRef, type:'number', value:answer,
+          onChange:function(e){setAnswer(e.target.value);},
+          onKeyDown:handleKey,
+          placeholder:'Twoja odpowiedź...',
+          style:{flex:1,fontSize:20,padding:'12px 16px',borderRadius:10,textAlign:'center',
+            border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',
+            fontFamily:'Outfit,sans-serif'}
+        }),
+        React.createElement('button', {
+          onClick:submitAnswer, disabled:answer==='',
+          style:{
+            background: answer===''?'var(--surface3)':'var(--math)',
+            color: answer===''?'var(--muted)':'#fff',
+            border:'none',padding:'0 24px',borderRadius:10,fontSize:16,fontWeight:600,
+            cursor:answer===''?'not-allowed':'pointer',fontFamily:'Outfit,sans-serif'
+          }
+        }, 'OK')
+      )
+    );
+  }
+
+  if (phase === 'result') {
+    var score2 = results.filter(function(r){return r.ok;}).length;
+    var pct2 = Math.round(score2/results.length*100);
+    var t2 = elapsed.toFixed(1);
+    var rec2 = getRecord(cat, maxN);
+    var isRecord = rec2 && rec2.pct === pct2 && Math.round(rec2.time) === Math.round(elapsed);
+    return React.createElement('div', {style:{padding:'8px 0'}},
+      React.createElement('div', {style:{textAlign:'center',marginBottom:24}},
+        React.createElement('div', {style:{fontSize:56,fontWeight:800,fontFamily:'Syne,sans-serif',color:pct2>=80?'#22c55e':pct2>=50?'#f59e0b':'#ef4444'}}, pct2+'%'),
+        React.createElement('div', {style:{color:'var(--muted)',fontSize:14,marginTop:4}}, score2+' / '+results.length+' poprawnych · '+t2+'s'),
+        isRecord && React.createElement('div', {style:{marginTop:8,color:'#f59e0b',fontWeight:600,fontSize:14}}, 'Nowy rekord!')
+      ),
+      React.createElement('div', {style:{display:'flex',gap:10,marginBottom:20}},
+        React.createElement('button', {
+          onClick:startGame,
+          style:{flex:1,background:'var(--math)',color:'#fff',border:'none',padding:'11px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Outfit,sans-serif'}
+        }, 'Jeszcze raz'),
+        React.createElement('button', {
+          onClick:function(){setPhase('menu');},
+          style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}
+        }, 'Zmień ustawienia')
+      ),
+      React.createElement('div', {style:{borderTop:'1px solid var(--border)',paddingTop:16}},
+        React.createElement('div', {style:{color:'var(--muted)',fontSize:12,marginBottom:10}}, 'Szczegóły:'),
+        results.map(function(r, i) {
+          return React.createElement('div', {
+            key:i,
+            style:{display:'flex',justifyContent:'space-between',padding:'6px 10px',borderRadius:8,marginBottom:4,
+              background:r.ok?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)',
+              border:'1px solid '+(r.ok?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)')}
+          },
+            React.createElement('span', {style:{fontSize:14,color:'var(--text)'}}, r.q+' = '+r.ans),
+            React.createElement('span', {style:{fontSize:13,fontWeight:600,color:r.ok?'#22c55e':'#ef4444'}}, r.ok ? 'OK' : 'Błąd ('+r.given+')')
+          );
+        })
+      )
+    );
+  }
+
+  return null;
+};
+
+// ─── MATH VIEW (z zakładkami) ─────────────────────────────────────────────────
+
+var MathView = function MathView(_ref_math) {
+  var subject = _ref_math.subject,
+    onUpdate = _ref_math.onUpdate;
+  var _mt = useState('dzialy'), mathTab = _mt[0], setMathTab = _mt[1];
+  var tabs = [
+    {id:'dzialy', label:'Działy', emoji:'📚'},
+    {id:'warmup', label:'Rozgrzewka', emoji:'🔥'},
+  ];
+  return React.createElement('div', {className:'fade-in'},
+    React.createElement('div', {style:{display:'flex',gap:8,marginBottom:20,borderBottom:'1px solid var(--border)',paddingBottom:0}},
+      tabs.map(function(t) {
+        var active = mathTab===t.id;
+        return React.createElement('button', {
+          key:t.id, onClick:function(){setMathTab(t.id);},
+          style:{
+            padding:'10px 20px',border:'none',background:'none',cursor:'pointer',
+            fontFamily:'Outfit,sans-serif',fontSize:14,fontWeight: active?600:400,
+            color: active?'var(--math)':'var(--muted)',
+            borderBottom: active?'2px solid var(--math)':'2px solid transparent',
+            transition:'all .15s',marginBottom:-1
+          }
+        }, t.emoji+' '+t.label);
+      })
+    ),
+    mathTab==='dzialy' && React.createElement(SubjectView, {subject:subject, onUpdate:onUpdate, searchQuery:''}),
+    mathTab==='warmup' && React.createElement('div', {style:{maxWidth:600}},
+      React.createElement('div', {style:{marginBottom:20}},
+        React.createElement('h3', {style:{fontFamily:'Syne,sans-serif',fontSize:18,marginBottom:6}}, 'Rozgrzewka matematyczna'),
+        React.createElement('p', {style:{color:'var(--muted)',fontSize:14}}, 'Szybkie działania na czas. Rekordy zapisują się automatycznie dla każdej kategorii i poziomu trudności.')
+      ),
+      React.createElement(MathWarmup, null)
+    )
+  );
 };
 
 // ─── SUBJECT VIEW ─────────────────────────────────────────────────────────────
@@ -11798,6 +11964,10 @@ function App() {
     });
     if (view === 'diary') return /*#__PURE__*/React.createElement(DiaryView, null);
     if (view === 'ai') return /*#__PURE__*/React.createElement(AIView, { subjects: state.subjects });
+    if (view === 'math' && state.subjects.math) return /*#__PURE__*/React.createElement(MathView, {
+      subject: state.subjects.math,
+      onUpdate: updateSubject
+    });
     if (state.subjects[view]) return /*#__PURE__*/React.createElement(SubjectView, {
       subject: state.subjects[view],
       onUpdate: updateSubject,
