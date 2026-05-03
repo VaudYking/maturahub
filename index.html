@@ -7716,7 +7716,6 @@ function srsDue(card) {
 var EngFlashcards = function EngFlashcards(_ref21) {
   var wordsData = _ref21.wordsData;
 
-  // Zbierz słowa
   var allWords = React.useMemo(function() {
     var out = [];
     (wordsData||[]).forEach(function(sec) {
@@ -7726,58 +7725,69 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     });
     return out;
   }, [wordsData]);
+
   var sections = React.useMemo(function() {
     return (wordsData||[]).filter(function(s){ return s.words && s.words.some(function(w){ return w.pl&&w.en; }); });
   }, [wordsData]);
 
-  // SRS state
+  // ── SRS ──
   var _srs0 = useState(srsLoad()), srsData = _srs0[0], setSrsData = _srs0[1];
+  // Używamy ref jako source of truth żeby uniknąć stale closures przy szybkim klikaniu
+  var srsRef = React.useRef(srsLoad());
+
   function updateSrs(wordId, rating) {
-    var updated = Object.assign({}, srsData);
-    updated[wordId] = srsUpdate(updated[wordId] || srsInit(wordId), rating);
-    setSrsData(updated); srsSave(updated);
-  }
-  function resetSrs() {
-    if (!window.confirm('Na pewno zresetować postęp wszystkich fiszek?')) return;
-    setSrsData({}); srsSave({});
+    var current = srsRef.current[wordId] || srsInit(wordId);
+    var updated = srsUpdate(current, rating);
+    srsRef.current = Object.assign({}, srsRef.current, _defineProperty({}, wordId, updated));
+    srsSave(srsRef.current);
+    setSrsData(Object.assign({}, srsRef.current)); // trigger re-render
   }
 
-  // UI state
-  var _m0 = useState('menu'), phase = _m0[0], setPhase = _m0[1]; // menu|flashcard|typing|result
+  function resetSrs() {
+    if (!window.confirm('Na pewno zresetować postęp wszystkich fiszek?')) return;
+    srsRef.current = {};
+    srsSave({});
+    setSrsData({});
+  }
+
+  // ── UI state ──
+  var _m0 = useState('menu'), phase = _m0[0], setPhase = _m0[1];
   var _m1 = useState('pl2en'), direction = _m1[0], setDirection = _m1[1];
   var _m2 = useState('all'), filterSec = _m2[0], setFilterSec = _m2[1];
   var _m3 = useState('all'), filterStatus = _m3[0], setFilterStatus = _m3[1];
-  var _m4 = useState('flashcard'), studyMode = _m4[0], setStudyMode = _m4[1]; // flashcard|typing
-  var _m5 = useState('all'), deckType = _m5[0], setDeckType = _m5[1]; // all|due|new|hard
-  var _m6 = useState([]), deck = _m6[0], setDeck = _m6[1];
-  var _m7 = useState(0), idx = _m7[0], setIdx = _m7[1];
-  var _m8 = useState(false), flipped = _m8[0], setFlipped = _m8[1];
-  var _m9 = useState([]), sessionResults = _m9[0], setSessionResults = _m9[1];
-  var _m10 = useState(''), typingAnswer = _m10[0], setTypingAnswer = _m10[1];
-  var _m11 = useState(null), typingResult = _m11[0], setTypingResult = _m11[1]; // null|'ok'|'err'
-  var _m12 = useState('stats'), menuTab = _m12[0], setMenuTab = _m12[1]; // settings|stats
+  var _m4 = useState('flashcard'), studyMode = _m4[0], setStudyMode = _m4[1];
+  var _m5 = useState('all'), deckType = _m5[0], setDeckType = _m5[1];
+  var _m6 = useState(20), deckLimit = _m6[0], setDeckLimit = _m6[1]; // NOWE: limit słów
+  var _m7 = useState([]), deck = _m7[0], setDeck = _m7[1];
+  var _m8 = useState(0), idx = _m8[0], setIdx = _m8[1];
+  var _m9 = useState(false), flipped = _m9[0], setFlipped = _m9[1];
+  var _m10 = useState([]), sessionResults = _m10[0], setSessionResults = _m10[1];
+  var _m11 = useState(''), typingAnswer = _m11[0], setTypingAnswer = _m11[1];
+  var _m12 = useState(null), typingResult = _m12[0], setTypingResult = _m12[1];
+  var _m13 = useState('settings'), menuTab = _m13[0], setMenuTab = _m13[1];
+  // Per-card direction (dla trybu random, obliczone przy starcie)
+  var _m14 = useState([]), cardDirs = _m14[0], setCardDirs = _m14[1];
   var typingRef = useRef(null);
 
-  // Stats
+  // ── Stats (zawsze z aktualnego srsRef) ──
   var stats = React.useMemo(function() {
-    var total = allWords.length;
-    var newC=0, learning=0, known=0, due=0;
+    var total = allWords.length, newC=0, learning=0, known=0, due=0;
     allWords.forEach(function(w) {
-      var c = srsData[w.id];
+      var c = srsRef.current[w.id];
       var st = srsGetStatus(c);
       if (st==='new') newC++;
       else if (st==='orange') learning++;
       else known++;
       if (srsDue(c)) due++;
     });
-    return {total, new:newC, learning, known, due};
-  }, [allWords, srsData]);
+    return {total, 'new':newC, learning, known, due};
+  }, [allWords, srsData]); // srsData jako dependency żeby przeliczać po każdej ocenie
 
-  // Build deck
+  // ── Build deck ──
   function buildDeck() {
     var pool = allWords.filter(function(w) {
       if (filterSec !== 'all' && w.secId !== filterSec) return false;
-      var c = srsData[w.id];
+      var c = srsRef.current[w.id];
       var st = srsGetStatus(c);
       if (filterStatus === 'red' && st !== 'red') return false;
       if (filterStatus === 'orange' && st !== 'orange') return false;
@@ -7788,19 +7798,27 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       if (deckType === 'hard' && (st === 'green' || st === 'new')) return false;
       return true;
     });
-    // SRS sort: due first, then by ef ascending (harder first)
+    // SRS sort: due first, then by ef ascending (trudniejsze najpierw)
     pool.sort(function(a,b) {
-      var ca = srsData[a.id], cb = srsData[b.id];
+      var ca = srsRef.current[a.id], cb = srsRef.current[b.id];
       var da = srsDue(ca), db = srsDue(cb);
       if (da && !db) return -1; if (!da && db) return 1;
       return (ca?ca.ef:2.5) - (cb?cb.ef:2.5);
     });
-    return pool;
+    // Ogranicz do limitu, potem przetasuj
+    var limited = pool.slice(0, deckLimit);
+    return limited.sort(function(){ return Math.random()-.5; });
   }
 
   function startSession() {
-    var d = buildDeck().sort(function(){ return Math.random()-.5; });
-    setDeck(d); setIdx(0); setFlipped(false); setSessionResults([]);
+    var d = buildDeck();
+    // Wyznacz kierunek dla każdej karty z góry (naprawia błąd z direction='random')
+    var dirs = d.map(function(_, i) {
+      if (direction === 'random') return Math.random() > .5 ? 'pl2en' : 'en2pl';
+      return direction;
+    });
+    setDeck(d); setCardDirs(dirs);
+    setIdx(0); setFlipped(false); setSessionResults([]);
     setTypingAnswer(''); setTypingResult(null);
     setPhase(studyMode);
     if (studyMode==='typing') setTimeout(function(){ if(typingRef.current) typingRef.current.focus(); },150);
@@ -7808,27 +7826,36 @@ var EngFlashcards = function EngFlashcards(_ref21) {
 
   function rateCard(rating) {
     var w = deck[idx];
-    updateSrs(w.id, rating);
-    var res = sessionResults.concat([{w:w, rating:rating}]);
+    updateSrs(w.id, rating); // zapisuje natychmiast przez ref
+    var res = sessionResults.concat([{w:w, rating:rating, dir:cardDirs[idx]}]);
     setSessionResults(res);
-    if (idx+1 >= deck.length) { setPhase('result'); return; }
+    if (idx+1 >= deck.length) {
+      setPhase('result');
+      return;
+    }
     setIdx(idx+1); setFlipped(false);
     setTypingAnswer(''); setTypingResult(null);
   }
 
+  function endSessionEarly() {
+    // Zakończ sesję w miejscu → pokaż wyniki tego co zrobione
+    setPhase('result');
+  }
+
   function checkTyping() {
     var w = deck[idx];
-    var correct = direction==='pl2en' ? w.en : w.pl;
+    var dir = cardDirs[idx]; // używamy per-card direction, nie globalnego
+    var correct = dir==='pl2en' ? w.en : w.pl;
     var input = typingAnswer.trim().toLowerCase();
     var expected = correct.trim().toLowerCase();
-    var ok = input === expected || expected.includes(input) && input.length >= expected.length-2;
+    var ok = input === expected || (expected.includes(input) && input.length >= expected.length-2);
     setTypingResult(ok ? 'ok' : 'err');
     setFlipped(true);
   }
 
   function handleTypingKey(e) {
     if (e.key==='Enter') {
-      if (!flipped) checkTyping();
+      if (!flipped) { if (typingAnswer.trim()) checkTyping(); }
       else if (typingResult==='ok') rateCard(3);
       else rateCard(0);
     }
@@ -7841,15 +7868,17 @@ var EngFlashcards = function EngFlashcards(_ref21) {
 
   // ── MENU ──
   if (phase==='menu') {
+    var availableCount = buildDeck().length; // ile słów spełnia filtry
     var statCards = [
       {label:'Wszystkie',val:stats.total,color:'var(--eng)'},
-      {label:'Nowe',val:stats.new,color:'#6b7280'},
+      {label:'Nowe',val:stats['new'],color:'#6b7280'},
       {label:'W nauce',val:stats.learning,color:'#f97316'},
       {label:'Opanowane',val:stats.known,color:'#22c55e'},
       {label:'Do powtórki',val:stats.due,color:'#ef4444'},
     ];
     return React.createElement('div',null,
-      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20,borderBottom:'1px solid var(--border)',paddingBottom:0}},
+      // Tabs
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20,borderBottom:'1px solid var(--border)'}},
         [{id:'settings',label:'Ustawienia',emoji:'⚙️'},{id:'stats',label:'Statystyki',emoji:'📊'}].map(function(t) {
           var active=menuTab===t.id;
           return React.createElement('button',{key:t.id,onClick:function(){setMenuTab(t.id);},style:{
@@ -7859,77 +7888,97 @@ var EngFlashcards = function EngFlashcards(_ref21) {
           }},t.emoji+' '+t.label);
         })
       ),
+
+      // ── STATS TAB ──
       menuTab==='stats' && React.createElement('div',null,
-        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:8,marginBottom:20}},
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(90px,1fr))',gap:8,marginBottom:20}},
           statCards.map(function(s) {
-            return React.createElement('div',{key:s.label,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'12px 10px',textAlign:'center'}},
-              React.createElement('div',{style:{fontSize:22,fontWeight:700,color:s.color,fontFamily:'Syne,sans-serif'}},(s.val||0)),
-              React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:4}},(s.label))
+            return React.createElement('div',{key:s.label,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'12px 8px',textAlign:'center'}},
+              React.createElement('div',{style:{fontSize:22,fontWeight:700,color:s.color,fontFamily:'Syne,sans-serif'}},s.val||0),
+              React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:4}},s.label)
             );
           })
         ),
         React.createElement('div',{style:{marginBottom:16}},
-          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Postęp wg działu'),
+          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Postęp wg działu'),
           sections.map(function(sec) {
             var secWords = allWords.filter(function(w){return w.secId===sec.id;});
-            var known2 = secWords.filter(function(w){ return srsGetStatus(srsData[w.id])==='green'; }).length;
-            var pct2 = secWords.length ? Math.round(known2/secWords.length*100) : 0;
-            return React.createElement('div',{key:sec.id,style:{marginBottom:8}},
-              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:3}},
-                React.createElement('span',{style:{color:'var(--text)'}},(sec.name)),
-                React.createElement('span',{style:{color:'var(--muted)'}},(known2)+'/'+secWords.length)
+            var statsSec = {new:0, learning:0, known:0};
+            secWords.forEach(function(w){
+              var st = srsGetStatus(srsRef.current[w.id]);
+              if (st==='new') statsSec.new++;
+              else if (st==='orange') statsSec.learning++;
+              else statsSec.known++;
+            });
+            var pct = secWords.length ? Math.round(statsSec.known/secWords.length*100) : 0;
+            return React.createElement('div',{key:sec.id,style:{marginBottom:12,padding:'10px 12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}},
+              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}},
+                React.createElement('span',{style:{color:'var(--text)',fontWeight:500}},sec.name),
+                React.createElement('span',{style:{color:'var(--muted)'}},statsSec.known+'/'+secWords.length+' opanowanych')
               ),
-              React.createElement('div',{style:{height:5,background:'var(--surface3)',borderRadius:3}},
-                React.createElement('div',{style:{height:5,width:pct2+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
+              React.createElement('div',{style:{height:6,background:'var(--surface3)',borderRadius:3,overflow:'hidden',display:'flex'}},
+                React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.known/secWords.length*100):0)+'%',background:'#22c55e',transition:'width .4s'}}),
+                React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.learning/secWords.length*100):0)+'%',background:'#f97316',transition:'width .4s'}})
+              ),
+              React.createElement('div',{style:{display:'flex',gap:12,marginTop:5,fontSize:10,color:'var(--muted)'}},
+                React.createElement('span',{style:{color:'#22c55e'}},'● '+statsSec.known+' opanowanych'),
+                React.createElement('span',{style:{color:'#f97316'}},'● '+statsSec.learning+' w nauce'),
+                React.createElement('span',{style:{color:'#6b7280'}},'● '+statsSec['new']+' nowych')
               )
             );
           })
         ),
         React.createElement('button',{onClick:resetSrs,style:{fontSize:11,color:'var(--muted)',background:'none',border:'1px solid var(--border)',borderRadius:8,padding:'4px 12px',cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Resetuj cały postęp SRS')
       ),
+
+      // ── SETTINGS TAB ──
       menuTab==='settings' && React.createElement('div',null,
+        // Tryb nauki
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Tryb nauki'),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            [{id:'flashcard',label:'🃏 Fiszki (kliknij i oceń)',desc:'Odkryj odpowiedź, oceń się sam'},{id:'typing',label:'⌨️ Wpisywanie',desc:'Wpisz odpowiedź z klawiatury'}].map(function(m) {
+            [{id:'flashcard',label:'🃏 Fiszki',desc:'Odkryj i oceń się sam'},{id:'typing',label:'⌨️ Wpisywanie',desc:'Wpisz odpowiedź'}].map(function(m) {
               var a=studyMode===m.id;
               return React.createElement('button',{key:m.id,onClick:function(){setStudyMode(m.id);},style:{
                 padding:'10px 14px',borderRadius:10,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
                 background:a?'rgba(59,130,246,.13)':'var(--surface2)',cursor:'pointer',textAlign:'left',
-                fontFamily:'Outfit,sans-serif',flex:1,minWidth:140
+                fontFamily:'Outfit,sans-serif',flex:1,minWidth:130
               }},
-                React.createElement('div',{style:{fontSize:13,fontWeight:600,color:a?'var(--eng)':'var(--text)'}},(m.label)),
-                React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:3}},(m.desc))
+                React.createElement('div',{style:{fontSize:13,fontWeight:600,color:a?'var(--eng)':'var(--text)'}},m.label),
+                React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:3}},m.desc)
               );
             })
           )
         ),
+        // Kierunek
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Kierunek'),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            [{id:'pl2en',label:'🇵🇱 → 🇬🇧 PL→EN'},{id:'en2pl',label:'🇬🇧 → 🇵🇱 EN→PL'},{id:'random',label:'🔀 Losowo'}].map(function(d) {
+            [{id:'pl2en',label:'🇵🇱→🇬🇧 PL→EN'},{id:'en2pl',label:'🇬🇧→🇵🇱 EN→PL'},{id:'random',label:'🔀 Losowo'}].map(function(d) {
               var a=direction===d.id;
               return React.createElement('button',{key:d.id,onClick:function(){setDirection(d.id);},style:{
                 padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
                 background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
                 cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
-              }},(d.label));
+              }},d.label);
             })
           )
         ),
+        // Zestaw
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            [{id:'all',label:'Wszystkie'},{id:'due',label:'Do powtórki ('+stats.due+')'},{id:'new',label:'Nowe ('+stats.new+')'},{id:'hard',label:'Trudne'}].map(function(d) {
+            [{id:'all',label:'Wszystkie'},{id:'due',label:'Do powtórki ('+stats.due+')'},{id:'new',label:'Nowe ('+stats['new']+')'},{id:'hard',label:'Trudne'}].map(function(d) {
               var a=deckType===d.id;
               return React.createElement('button',{key:d.id,onClick:function(){setDeckType(d.id);},style:{
                 padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
                 background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
                 cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
-              }},(d.label));
+              }},d.label);
             })
           )
         ),
+        // Dział
         sections.length>1 && React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Dział'),
           React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
@@ -7937,7 +7986,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
               padding:'5px 12px',borderRadius:8,border:'1px solid '+(filterSec==='all'?'var(--eng)':'var(--border)'),
               background:filterSec==='all'?'rgba(59,130,246,.13)':'transparent',color:filterSec==='all'?'var(--eng)':'var(--muted)',
               cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
-            }},'Wszystkie ('+allWords.length+')'),
+            }},'Wszystkie'),
             sections.map(function(sec) {
               var cnt=(sec.words||[]).filter(function(w){return w.pl&&w.en;}).length;
               var a=filterSec===sec.id;
@@ -7945,11 +7994,12 @@ var EngFlashcards = function EngFlashcards(_ref21) {
                 padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
                 background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
                 cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
-              }},(sec.name)+' ('+cnt+')');
+              }},sec.name+' ('+cnt+')');
             })
           )
         ),
-        React.createElement('div',{style:{marginBottom:20}},
+        // Filtr statusu
+        React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Filtr statusu'),
           React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
             [{id:'all',label:'Wszystkie',c:'var(--eng)'},{id:'new',label:'Nowe',c:'#6b7280'},{id:'red',label:'Trudne',c:'#ef4444'},{id:'orange',label:'W nauce',c:'#f97316'},{id:'green',label:'Opanowane',c:'#22c55e'}].map(function(f) {
@@ -7958,54 +8008,87 @@ var EngFlashcards = function EngFlashcards(_ref21) {
                 padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?f.c:'var(--border)'),
                 background:a?(f.c+'22'):'transparent',color:a?f.c:'var(--muted)',
                 cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
-              }},(f.label));
+              }},f.label);
             })
           )
         ),
-        React.createElement('button',{onClick:startSession,style:{
-          background:'var(--eng)',color:'#fff',border:'none',padding:'13px',borderRadius:12,
-          fontSize:15,fontWeight:600,cursor:'pointer',width:'100%',fontFamily:'Outfit,sans-serif'
-        }},'▶ Start – '+buildDeck().length+' słówek')
+        // Liczba słów (NOWE)
+        React.createElement('div',{style:{marginBottom:20}},
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
+            React.createElement('span',{style:{fontSize:12,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Liczba słów w sesji'),
+            React.createElement('span',{style:{color:'var(--eng)',fontWeight:700,fontSize:14}},
+              Math.min(deckLimit, availableCount)+' / '+availableCount+' dostępnych'
+            )
+          ),
+          React.createElement('input',{
+            type:'range', min:5, max:Math.max(5, availableCount), step:5,
+            value:Math.min(deckLimit, Math.max(5, availableCount)),
+            onChange:function(e){setDeckLimit(Number(e.target.value));},
+            style:{width:'100%',accentColor:'var(--eng)'}
+          }),
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:10,color:'var(--muted)',marginTop:3}},
+            React.createElement('span','','5'),
+            React.createElement('span','',Math.max(5,availableCount)+' (wszystkie)')
+          )
+        ),
+        // START
+        React.createElement('button',{
+          onClick:startSession,
+          disabled:availableCount===0,
+          style:{
+            background:availableCount>0?'var(--eng)':'var(--surface3)',
+            color:availableCount>0?'#fff':'var(--muted)',
+            border:'none',padding:'13px',borderRadius:12,fontSize:15,fontWeight:600,
+            cursor:availableCount>0?'pointer':'not-allowed',width:'100%',fontFamily:'Outfit,sans-serif'
+          }
+        },'▶ Start – '+Math.min(deckLimit,availableCount)+' fiszek')
       )
     );
   }
 
-  // ── FLASHCARD phase ──
+  // ── Fiszka ──
   if (phase==='flashcard') {
     var w = deck[idx];
-    var dir = direction==='random' ? (idx%2===0?'pl2en':'en2pl') : direction;
+    var dir = cardDirs[idx] || direction;
     var front = dir==='pl2en' ? w.pl : w.en;
     var back = dir==='pl2en' ? w.en : w.pl;
-    var c = srsData[w.id];
+    var c = srsRef.current[w.id];
     var st = srsGetStatus(c);
     var stColor = st==='green'?'#22c55e':st==='orange'?'#f97316':st==='red'?'#ef4444':'#6b7280';
+    var stLabel = st==='new'?'Nowe':st==='green'?'Opanowane':st==='orange'?'W nauce':'Trudne';
     return React.createElement('div',null,
+      // Header
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
         React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length),
-        React.createElement('span',{style:{fontSize:11,color:stColor,background:stColor+'22',padding:'2px 8px',borderRadius:10}},
-          st==='new'?'Nowe':st==='green'?'Opanowane':st==='orange'?'W nauce':'Trudne'
-        ),
-        React.createElement('button',{onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}},'✕')
+        React.createElement('span',{style:{fontSize:11,color:stColor,background:stColor+'22',padding:'2px 8px',borderRadius:10}},stLabel),
+        React.createElement('button',{
+          onClick:endSessionEarly,
+          title:'Zakończ i pokaż wyniki',
+          style:{background:'none',border:'1px solid var(--border)',borderRadius:7,color:'var(--muted)',cursor:'pointer',fontSize:11,padding:'3px 8px',fontFamily:'Outfit,sans-serif'}
+        },'Zakończ ⏹')
       ),
+      // Progress
       React.createElement('div',{style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:20}},
         React.createElement('div',{style:{height:4,width:Math.round(idx/deck.length*100)+'%',background:'var(--eng)',borderRadius:2,transition:'width .3s'}})
       ),
+      // Karta
       React.createElement('div',{onClick:function(){setFlipped(function(f){return !f;});},style:{
         minHeight:180,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
         cursor:'pointer',textAlign:'center',padding:'36px 24px',marginBottom:16,borderRadius:16,
-        background:flipped?'linear-gradient(135deg,var(--eng-dim),var(--surface))':'var(--surface2)',
+        background:flipped?'linear-gradient(135deg,rgba(59,130,246,.08),var(--surface))':'var(--surface2)',
         border:'1px solid '+(flipped?'var(--eng)':'var(--border)'),transition:'all .25s'
       }},
         React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:10,textTransform:'uppercase',letterSpacing:'.08em'}},
           flipped?(dir==='pl2en'?'🇬🇧 Angielski':'🇵🇱 Polski'):(dir==='pl2en'?'🇵🇱 Polski':'🇬🇧 Angielski')
         ),
-        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:26,fontWeight:700,color:flipped?'var(--eng)':'var(--text)',transition:'color .25s'}},(flipped?back:front)),
-        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:10}},(w.secName)),
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:26,fontWeight:700,color:flipped?'var(--eng)':'var(--text)',transition:'color .25s'}},flipped?back:front),
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:10}},w.secName),
         !flipped && React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:16,opacity:.6}},'Kliknij aby odkryć →'),
         flipped && c && c.totalReviews>0 && React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:12}},
-          'Powtarzane '+(c.totalReviews||0)+' razy · '+(Math.round((c.correct||0)/(c.totalReviews||1)*100))+'% dobrych'
+          'Powtarzane '+c.totalReviews+'× · '+Math.round((c.correct||0)/c.totalReviews*100)+'% dobrych'
         )
       ),
+      // Ocena / Odkryj
       flipped ? React.createElement('div',null,
         React.createElement('div',{style:{fontSize:11,color:'var(--muted)',textAlign:'center',marginBottom:8}},'Jak Ci poszło?'),
         React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}},
@@ -8014,8 +8097,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
               background:btn.c+'22',border:'1px solid '+btn.c+'55',borderRadius:10,padding:'10px 6px',
               cursor:'pointer',fontFamily:'Outfit,sans-serif',transition:'all .15s'
             }},
-              React.createElement('div',{style:{fontWeight:600,color:btn.c,fontSize:13}},(btn.label)),
-              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',marginTop:2}},(btn.sub))
+              React.createElement('div',{style:{fontWeight:600,color:btn.c,fontSize:13}},btn.label),
+              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',marginTop:2}},btn.sub)
             );
           })
         )
@@ -8026,18 +8109,25 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     );
   }
 
-  // ── TYPING phase ──
+  // ── Wpisywanie ──
   if (phase==='typing') {
     var wt = deck[idx];
-    var dirt = direction==='random' ? (idx%2===0?'pl2en':'en2pl') : direction;
+    var dirt = cardDirs[idx] || direction;
     var frontt = dirt==='pl2en' ? wt.pl : wt.en;
     var backt = dirt==='pl2en' ? wt.en : wt.pl;
-    var ct = srsData[wt.id];
-    var stColor2 = srsGetStatus(ct)==='green'?'#22c55e':srsGetStatus(ct)==='orange'?'#f97316':'#ef4444';
+    var ct = srsRef.current[wt.id];
+    var stt = srsGetStatus(ct);
+    var stColorT = stt==='green'?'#22c55e':stt==='orange'?'#f97316':'#ef4444';
     return React.createElement('div',null,
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
-        React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length+' · ⌨️ Wpisywanie'),
-        React.createElement('button',{onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}},'✕')
+        React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length+' · ⌨️'),
+        React.createElement('span',{style:{fontSize:11,color:stColorT,background:stColorT+'22',padding:'2px 8px',borderRadius:10}},
+          stt==='new'?'Nowe':stt==='green'?'Opanowane':stt==='orange'?'W nauce':'Trudne'
+        ),
+        React.createElement('button',{
+          onClick:endSessionEarly,
+          style:{background:'none',border:'1px solid var(--border)',borderRadius:7,color:'var(--muted)',cursor:'pointer',fontSize:11,padding:'3px 8px',fontFamily:'Outfit,sans-serif'}
+        },'Zakończ ⏹')
       ),
       React.createElement('div',{style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:20}},
         React.createElement('div',{style:{height:4,width:Math.round(idx/deck.length*100)+'%',background:'var(--eng)',borderRadius:2,transition:'width .3s'}})
@@ -8046,20 +8136,21 @@ var EngFlashcards = function EngFlashcards(_ref21) {
         React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:8,textTransform:'uppercase',letterSpacing:'.08em'}},
           dirt==='pl2en'?'🇵🇱 Polski → przetłumacz na angielski':'🇬🇧 Angielski → przetłumacz na polski'
         ),
-        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:700,color:'var(--text)'}},(frontt)),
-        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:8}},(wt.secName))
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:28,fontWeight:700,color:'var(--text)'}},frontt),
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:8}},wt.secName)
       ),
       !flipped && React.createElement('div',{style:{display:'flex',gap:8,marginBottom:12}},
         React.createElement('input',{
-          ref:typingRef, type:'text', value:typingAnswer,
+          ref:typingRef,type:'text',value:typingAnswer,
           onChange:function(e){setTypingAnswer(e.target.value);},
-          onKeyDown:handleTypingKey, placeholder:'Wpisz odpowiedź...',
+          onKeyDown:handleTypingKey,placeholder:'Wpisz odpowiedź...',
           style:{flex:1,padding:'12px 14px',borderRadius:10,border:'1px solid var(--border)',
             background:'var(--surface)',color:'var(--text)',fontSize:16,fontFamily:'Outfit,sans-serif'}
         }),
         React.createElement('button',{onClick:checkTyping,disabled:!typingAnswer.trim(),style:{
           background:typingAnswer.trim()?'var(--eng)':'var(--surface3)',color:typingAnswer.trim()?'#fff':'var(--muted)',
-          border:'none',padding:'0 20px',borderRadius:10,cursor:typingAnswer.trim()?'pointer':'not-allowed',fontFamily:'Outfit,sans-serif',fontWeight:600
+          border:'none',padding:'0 20px',borderRadius:10,cursor:typingAnswer.trim()?'pointer':'not-allowed',
+          fontFamily:'Outfit,sans-serif',fontWeight:600
         }},'Sprawdź')
       ),
       flipped && React.createElement('div',null,
@@ -8070,7 +8161,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
           React.createElement('div',{style:{fontWeight:600,color:typingResult==='ok'?'#22c55e':'#ef4444',marginBottom:4}},
             typingResult==='ok'?'✓ Dobrze!':'✗ Błąd!'
           ),
-          React.createElement('div',{style:{fontSize:14,color:'var(--text)'}},'Poprawna odpowiedź: ',React.createElement('strong',null,(backt))),
+          React.createElement('div',{style:{fontSize:14,color:'var(--text)'}},'Poprawna odpowiedź: ',React.createElement('strong',null,backt)),
           typingResult==='err' && React.createElement('div',{style:{fontSize:13,color:'var(--muted)',marginTop:4}},'Twoja odpowiedź: '+(typingAnswer||'(brak)'))
         ),
         React.createElement('div',{style:{display:'flex',gap:8}},
@@ -8090,26 +8181,53 @@ var EngFlashcards = function EngFlashcards(_ref21) {
 
   // ── RESULT ──
   if (phase==='result') {
-    var correct = sessionResults.filter(function(r){return r.rating>=2;}).length;
-    var pctR = sessionResults.length ? Math.round(correct/sessionResults.length*100) : 0;
     var ratingLabels = ['Znowu','Trudne','Dobre','Łatwe'];
     var ratingColors = ['#ef4444','#f97316','#3b82f6','#22c55e'];
+    var correctR = sessionResults.filter(function(r){return r.rating>=2;}).length;
+    var pctR = sessionResults.length ? Math.round(correctR/sessionResults.length*100) : 0;
+    var skipped = deck.length - sessionResults.length;
+    // Statystyki po sesji (przeliczone z aktualnego srsRef)
+    var postStats = {total:allWords.length, 'new':0, learning:0, known:0};
+    allWords.forEach(function(w){
+      var st = srsGetStatus(srsRef.current[w.id]);
+      if (st==='new') postStats['new']++;
+      else if (st==='orange') postStats.learning++;
+      else postStats.known++;
+    });
     return React.createElement('div',null,
-      React.createElement('div',{style:{textAlign:'center',marginBottom:24}},
-        React.createElement('div',{style:{fontSize:52,fontWeight:800,fontFamily:'Syne,sans-serif',color:pctR>=80?'#22c55e':pctR>=50?'#f59e0b':'#ef4444'}},(pctR)+'%'),
-        React.createElement('div',{style:{color:'var(--muted)',fontSize:14,marginTop:4}},(correct)+' / '+sessionResults.length+' opanowanych')
+      // Wynik sesji
+      React.createElement('div',{style:{textAlign:'center',marginBottom:20,padding:'20px',background:'var(--surface2)',borderRadius:14,border:'1px solid var(--border)'}},
+        React.createElement('div',{style:{fontSize:52,fontWeight:800,fontFamily:'Syne,sans-serif',color:pctR>=80?'#22c55e':pctR>=50?'#f59e0b':'#ef4444'}},pctR+'%'),
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:14,marginTop:4}},correctR+' / '+sessionResults.length+' opanowanych w tej sesji'),
+        skipped>0 && React.createElement('div',{style:{color:'var(--muted)',fontSize:12,marginTop:4}},'Pominięto: '+skipped+' fiszek')
       ),
-      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:20}},
+      // Mini-statystyki ogółem po sesji
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}},
+        [{label:'Nowe',val:postStats['new'],c:'#6b7280'},{label:'W nauce',val:postStats.learning,c:'#f97316'},{label:'Opanowane',val:postStats.known,c:'#22c55e'}].map(function(s){
+          return React.createElement('div',{key:s.label,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 8px',textAlign:'center'}},
+            React.createElement('div',{style:{fontSize:20,fontWeight:700,color:s.c,fontFamily:'Syne,sans-serif'}},s.val),
+            React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:3}},s.label)
+          );
+        })
+      ),
+      // Przyciski
+      React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16}},
         React.createElement('button',{onClick:startSession,style:{flex:1,background:'var(--eng)',color:'#fff',border:'none',padding:'11px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Jeszcze raz'),
-        React.createElement('button',{onClick:function(){setPhase('menu');setMenuTab('settings');},style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'Zmień ustawienia')
+        React.createElement('button',{onClick:function(){setPhase('menu');setMenuTab('stats');},style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'📊 Statystyki'),
+        React.createElement('button',{onClick:function(){setPhase('menu');setMenuTab('settings');},style:{background:'var(--surface2)',color:'var(--muted)',border:'1px solid var(--border)',padding:'11px 14px',borderRadius:10,fontSize:13,cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'⚙️')
       ),
-      React.createElement('div',{style:{borderTop:'1px solid var(--border)',paddingTop:16}},
-        React.createElement('div',{style:{color:'var(--muted)',fontSize:12,marginBottom:10}},'Wyniki sesji:'),
+      // Lista wyników sesji
+      sessionResults.length > 0 && React.createElement('div',{style:{borderTop:'1px solid var(--border)',paddingTop:14}},
+        React.createElement('div',{style:{color:'var(--muted)',fontSize:12,marginBottom:10,fontWeight:600}},'Wyniki tej sesji:'),
         sessionResults.map(function(r,i) {
           var rCol = ratingColors[r.rating];
-          return React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 10px',borderRadius:8,marginBottom:4,background:'var(--surface2)'}},
-            React.createElement('span',{style:{fontSize:13,color:'var(--text)'}},(r.w.pl)+' → '+(r.w.en)),
-            React.createElement('span',{style:{fontSize:11,color:rCol,background:rCol+'22',padding:'2px 8px',borderRadius:8}},(ratingLabels[r.rating]))
+          var dr = r.dir || direction;
+          return React.createElement('div',{key:i,style:{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 10px',borderRadius:8,marginBottom:4,
+            background:r.rating>=2?'rgba(34,197,94,.05)':'rgba(239,68,68,.05)',
+            border:'1px solid '+(r.rating>=2?'rgba(34,197,94,.15)':'rgba(239,68,68,.15)')
+          }},
+            React.createElement('span',{style:{fontSize:13,color:'var(--text)',flex:1}},r.w.pl+' → '+r.w.en),
+            React.createElement('span',{style:{fontSize:11,color:rCol,background:rCol+'22',padding:'2px 8px',borderRadius:8,flexShrink:0}},ratingLabels[r.rating])
           );
         })
       )
@@ -8117,6 +8235,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
   }
   return null;
 };
+
+
 
 /* ---------- QUIZ SŁÓWEK – NOWY ─────────────────────────────────────────────── */
 var EngQuiz = function EngQuiz(_ref23) {
