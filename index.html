@@ -1593,7 +1593,7 @@ function flushSyncToSupabase() {
 }
 function _flushSyncToSupabase() {
   _flushSyncToSupabase = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee() {
-    var data, cleanChatData, _t;
+    var data, cleanChatData, cleanSubjects, upsertResult, _t;
     return _regenerator().w(function (_context) {
       while (1) switch (_context.p = _context.n) {
         case 0:
@@ -1612,30 +1612,40 @@ function _flushSyncToSupabase() {
         case 3:
           cleanChatData = _context.v;
           _context.n = 4;
+          return uploadEngDataImagesToStorage(data.subjects);
+        case 4:
+          cleanSubjects = _context.v;
+          _context.n = 5;
           return supabase.from('app_state').upsert({
             id: 'main',
-            subjects: data.subjects || {},
+            subjects: cleanSubjects || {},
             tracker: data.tracker || {},
             chat_data: cleanChatData || {}
           });
-        case 4:
-          setSyncStatus('synced');
-          _context.n = 6;
-          break;
         case 5:
-          _context.p = 5;
+          upsertResult = _context.v;
+          if (upsertResult && upsertResult.error) {
+            console.warn('Supabase upsert error:', upsertResult.error);
+            setSyncStatus('error');
+          } else {
+            setSyncStatus('synced');
+          }
+          _context.n = 7;
+          break;
+        case 6:
+          _context.p = 6;
           _t = _context.v;
           console.warn('Supabase sync error:', _t);
           setSyncStatus('error');
-        case 6:
-          _context.p = 6;
+        case 7:
+          _context.p = 7;
           _isSyncing = false;
           if (_pendingState) flushSyncToSupabase();
-          return _context.f(6);
-        case 7:
+          return _context.f(7);
+        case 8:
           return _context.a(2);
       }
-    }, _callee, null, [[2, 5, 6, 7]]);
+    }, _callee, null, [[2, 6, 7, 8]]);
   }));
   return _flushSyncToSupabase.apply(this, arguments);
 }
@@ -1677,98 +1687,110 @@ function _loadFromSupabase() {
   }));
   return _loadFromSupabase.apply(this, arguments);
 }
-function uploadChatImagesToStorage(_x) {
-  return _uploadChatImagesToStorage.apply(this, arguments);
+// Helper: upload single base64 image to Supabase Storage, return public URL or original
+async function uploadSingleImageToStorage(base64DataUrl, folder, id) {
+  if (!base64DataUrl || !base64DataUrl.startsWith('data:image')) return base64DataUrl;
+  // Already a storage URL — skip
+  if (base64DataUrl.startsWith('https://')) return base64DataUrl;
+  try {
+    var ext = base64DataUrl.includes('png') ? 'png' : 'jpg';
+    var fileName = folder + '/' + (id || Date.now()) + '.' + ext;
+    var blob = dataUrlToBlob(base64DataUrl);
+    var _up = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, blob, { upsert: true, contentType: blob.type });
+    if (_up.data) {
+      var _url = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+      return _url.data.publicUrl;
+    }
+  } catch(e) { /* keep original on error */ }
+  return base64DataUrl;
 }
-function _uploadChatImagesToStorage() {
-  _uploadChatImagesToStorage = _asyncToGenerator(/*#__PURE__*/_regenerator().m(function _callee3(chatData) {
-    var result, _i, _Object$entries, _Object$entries$_i, subject, messages, _iterator4, _step4, msg, ext, fileName, blob, _yield$supabase$stora, uploadData, _supabase$storage$fro, urlData, _t3, _t4;
-    return _regenerator().w(function (_context3) {
-      while (1) switch (_context3.p = _context3.n) {
-        case 0:
-          if (chatData) {
-            _context3.n = 1;
-            break;
-          }
-          return _context3.a(2, chatData);
-        case 1:
-          result = {};
-          _i = 0, _Object$entries = Object.entries(chatData);
-        case 2:
-          if (!(_i < _Object$entries.length)) {
-            _context3.n = 15;
-            break;
-          }
-          _Object$entries$_i = _slicedToArray(_Object$entries[_i], 2), subject = _Object$entries$_i[0], messages = _Object$entries$_i[1];
-          result[subject] = [];
-          _iterator4 = _createForOfIteratorHelper(messages || []);
-          _context3.p = 3;
-          _iterator4.s();
-        case 4:
-          if ((_step4 = _iterator4.n()).done) {
-            _context3.n = 11;
-            break;
-          }
-          msg = _step4.value;
-          if (!(msg.image && msg.image.startsWith('data:image'))) {
-            _context3.n = 9;
-            break;
-          }
-          _context3.p = 5;
-          ext = msg.image.includes('png') ? 'png' : 'jpg';
-          fileName = "chat/".concat(subject, "/").concat(msg.id || Date.now(), ".").concat(ext);
-          blob = dataUrlToBlob(msg.image);
-          _context3.n = 6;
-          return supabase.storage.from(STORAGE_BUCKET).upload(fileName, blob, {
-            upsert: true,
-            contentType: blob.type
-          });
-        case 6:
-          _yield$supabase$stora = _context3.v;
-          uploadData = _yield$supabase$stora.data;
-          if (uploadData) {
-            _supabase$storage$fro = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName), urlData = _supabase$storage$fro.data;
-            result[subject].push(_objectSpread(_objectSpread({}, msg), {}, {
-              image: urlData.publicUrl
-            }));
-          } else {
-            result[subject].push(msg);
-          }
-          _context3.n = 8;
-          break;
-        case 7:
-          _context3.p = 7;
-          _t3 = _context3.v;
-          result[subject].push(msg);
-        case 8:
-          _context3.n = 10;
-          break;
-        case 9:
-          result[subject].push(msg);
-        case 10:
-          _context3.n = 4;
-          break;
-        case 11:
-          _context3.n = 13;
-          break;
-        case 12:
-          _context3.p = 12;
-          _t4 = _context3.v;
-          _iterator4.e(_t4);
-        case 13:
-          _context3.p = 13;
-          _iterator4.f();
-          return _context3.f(13);
-        case 14:
-          _i++;
-          _context3.n = 2;
-          break;
-        case 15:
-          return _context3.a(2, result);
-      }
-    }, _callee3, null, [[5, 7], [3, 12, 13, 14]]);
+
+// Upload images from a messages array — handles both 'src' and 'image' keys
+async function uploadChatImagesToStorage(chatData) {
+  if (!chatData) return chatData;
+  var result = {};
+  for (var subject of Object.keys(chatData)) {
+    result[subject] = await Promise.all((chatData[subject] || []).map(async function(msg) {
+      // Handles both msg.src and msg.image (different parts of the app use different keys)
+      var imgKey = (msg.src && msg.src.startsWith && msg.src.startsWith('data:image')) ? 'src'
+                 : (msg.image && msg.image.startsWith && msg.image.startsWith('data:image')) ? 'image'
+                 : null;
+      if (!imgKey) return msg;
+      var url = await uploadSingleImageToStorage(msg[imgKey], 'chat/' + subject, msg.id || ('c_' + Date.now()));
+      return Object.assign({}, msg, { [imgKey]: url });
+    }));
+  }
+  return result;
+}
+
+// Upload all images from subtopic chatMessages inside subjects
+async function uploadSubjectChatImagesToStorage(subjects) {
+  if (!subjects) return subjects;
+  var result = {};
+  for (var subjectKey of Object.keys(subjects)) {
+    var subj = subjects[subjectKey];
+    if (!subj || !subj.sections) { result[subjectKey] = subj; continue; }
+    var newSections = await Promise.all((subj.sections || []).map(async function(section) {
+      if (!section.subtopics) return section;
+      var newSubtopics = await Promise.all((section.subtopics || []).map(async function(st) {
+        if (!st.chatMessages || !st.chatMessages.length) return st;
+        // Check if any message has base64
+        var hasBase64 = st.chatMessages.some(function(m) {
+          return (m.src && m.src.startsWith && m.src.startsWith('data:image')) ||
+                 (m.image && m.image.startsWith && m.image.startsWith('data:image'));
+        });
+        if (!hasBase64) return st;
+        var newMsgs = await Promise.all(st.chatMessages.map(async function(msg) {
+          var imgKey = (msg.src && msg.src.startsWith && msg.src.startsWith('data:image')) ? 'src'
+                     : (msg.image && msg.image.startsWith && msg.image.startsWith('data:image')) ? 'image'
+                     : null;
+          if (!imgKey) return msg;
+          var folder = 'subtopic/' + subjectKey + '/' + (section.id || 'sec');
+          var url = await uploadSingleImageToStorage(msg[imgKey], folder, msg.id || ('st_' + Date.now()));
+          return Object.assign({}, msg, { [imgKey]: url });
+        }));
+        return Object.assign({}, st, { chatMessages: newMsgs });
+      }));
+      return Object.assign({}, section, { subtopics: newSubtopics });
+    }));
+    result[subjectKey] = Object.assign({}, subj, { sections: newSections });
+  }
+  return result;
+}
+
+// Upload imageDesc, email images from engData, AND subtopic chatMessages
+async function uploadEngDataImagesToStorage(subjects) {
+  if (!subjects) return subjects;
+
+  // First handle subtopic chatMessages across ALL subjects
+  var cleanedSubjects = await uploadSubjectChatImagesToStorage(subjects);
+
+  // Then handle english engData (imageDesc + email)
+  if (!cleanedSubjects.english) return cleanedSubjects;
+  var eng = cleanedSubjects.english;
+  var engData = eng.engData;
+  if (!engData) return cleanedSubjects;
+
+  var newImageDesc = await Promise.all((engData.imageDesc || []).map(async function(item) {
+    if (!item.img || !item.img.startsWith('data:image')) return item;
+    var url = await uploadSingleImageToStorage(item.img, 'engdata/imgdesc', item.id || ('imgd_' + Date.now()));
+    return Object.assign({}, item, { img: url });
   }));
-  return _uploadChatImagesToStorage.apply(this, arguments);
+
+  var newEmail = await Promise.all((engData.email || []).map(async function(item) {
+    if (!item.img || !item.img.startsWith('data:image')) return item;
+    var url = await uploadSingleImageToStorage(item.img, 'engdata/email', item.id || ('em_' + Date.now()));
+    return Object.assign({}, item, { img: url });
+  }));
+
+  return Object.assign({}, cleanedSubjects, {
+    english: Object.assign({}, eng, {
+      engData: Object.assign({}, engData, {
+        imageDesc: newImageDesc,
+        email: newEmail
+      })
+    })
+  });
 }
 function dataUrlToBlob(dataUrl) {
   var _dataUrl$split = dataUrl.split(','),
@@ -1825,38 +1847,53 @@ function compressImage(dataUrl) {
 // Strip large images from data before saving (images > 100KB stored as placeholder)
 function prepareForStorage(data) {
   var _data$chatData, _data$chatData2, _data$chatData3;
+  // Czyści wiadomości z dużymi base64 (zarówno klucz src jak i image)
   var strip = function strip(msgs) {
     return (msgs || []).map(function (m) {
-      if (m.type === 'image' && m.src && m.src.length > 100000) {
-        return _objectSpread(_objectSpread({}, m), {}, {
-          src: m._thumb || m.src
-        }); // use thumbnail if available
+      var srcVal = m.src || m.image;
+      if (m.type === 'image' && srcVal && srcVal.startsWith && srcVal.startsWith('data:image') && srcVal.length > 50000) {
+        // Jeśli już mamy URL supabase — zachowaj, jeśli tylko base64 — usuń (placeholder)
+        if (m.src && m.src.startsWith('data:image')) return _objectSpread(_objectSpread({}, m), {}, { src: '[zdjęcie w chmurze]' });
+        if (m.image && m.image.startsWith('data:image')) return _objectSpread(_objectSpread({}, m), {}, { image: '[zdjęcie w chmurze]' });
       }
       return m;
     });
   };
+  // Czyści imageDesc i email z base64 > 50KB (zastępuje pustym stringiem — zdjęcie jest w Storage)
+  var stripEngItem = function stripEngItem(item) {
+    if (item && item.img && item.img.startsWith && item.img.startsWith('data:image') && item.img.length > 50000) {
+      return _objectSpread(_objectSpread({}, item), {}, { img: '[zdjęcie w chmurze]' });
+    }
+    return item;
+  };
+  var cleanedSubjects = Object.fromEntries(Object.entries(data.subjects || {}).map(function (_ref) {
+    var _ref2 = _slicedToArray(_ref, 2),
+      k = _ref2[0],
+      subj = _ref2[1];
+    return [k, _objectSpread(_objectSpread({}, subj), {}, {
+      sections: (subj.sections || []).map(function (sec) {
+        return _objectSpread(_objectSpread({}, sec), {}, {
+          subtopics: (sec.subtopics || []).map(function (st) {
+            return _objectSpread(_objectSpread({}, st), {}, {
+              chatMessages: strip(st.chatMessages)
+            });
+          })
+        });
+      }),
+      // Czyść engData.imageDesc i engData.email jeśli to english
+      engData: subj.engData ? _objectSpread(_objectSpread({}, subj.engData), {}, {
+        imageDesc: (subj.engData.imageDesc || []).map(stripEngItem),
+        email: (subj.engData.email || []).map(stripEngItem)
+      }) : subj.engData
+    })];
+  }));
   return _objectSpread(_objectSpread({}, data), {}, {
     chatData: {
       math: strip((_data$chatData = data.chatData) === null || _data$chatData === void 0 ? void 0 : _data$chatData.math),
       polish: strip((_data$chatData2 = data.chatData) === null || _data$chatData2 === void 0 ? void 0 : _data$chatData2.polish),
       english: strip((_data$chatData3 = data.chatData) === null || _data$chatData3 === void 0 ? void 0 : _data$chatData3.english)
     },
-    subjects: Object.fromEntries(Object.entries(data.subjects || {}).map(function (_ref) {
-      var _ref2 = _slicedToArray(_ref, 2),
-        k = _ref2[0],
-        subj = _ref2[1];
-      return [k, _objectSpread(_objectSpread({}, subj), {}, {
-        sections: (subj.sections || []).map(function (sec) {
-          return _objectSpread(_objectSpread({}, sec), {}, {
-            subtopics: (sec.subtopics || []).map(function (st) {
-              return _objectSpread(_objectSpread({}, st), {}, {
-                chatMessages: strip(st.chatMessages)
-              });
-            })
-          });
-        })
-      })];
-    }))
+    subjects: cleanedSubjects
   });
 }
 function loadData() {
@@ -13123,7 +13160,8 @@ function App() {
             tracker: remoteData.tracker || prev.tracker,
             chatData: remoteData.chatData || prev.chatData
           });
-          saveData(merged); // zaktualizuj localStorage
+          // Zapisz tylko lokalnie — nie odsyłaj z powrotem do Supabase (dane stamtąd przyszły)
+          try { var _prep = prepareForStorage(merged); localStorage.setItem(LS_KEY, JSON.stringify(_prep)); } catch(e) {}
           streakReadyRef.current = true;
           return merged;
         }
