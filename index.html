@@ -6322,6 +6322,10 @@ var EngWords = function EngWords(_ref14) {
     _React$useState8 = _slicedToArray(_React$useState7, 2),
     addingSec = _React$useState8[0],
     setAddingSec = _React$useState8[1];
+  var _useStateHC = React.useState('none'),
+    _useStateHC2 = _slicedToArray(_useStateHC, 2),
+    hideCol = _useStateHC2[0],
+    setHideCol = _useStateHC2[1];
   var save = function save(updated) {
     setSections(updated);
     onChange(updated);
@@ -6400,7 +6404,11 @@ var EngWords = function EngWords(_ref14) {
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "plus",
     size: 13
-  }), " Dodaj nowy dzia\u0142")), addingSec && /*#__PURE__*/React.createElement("div", {
+  }), " Dodaj nowy dzia\u0142")), /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:4,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:"3px",marginBottom:12}},
+    React.createElement("button",{onClick:function(){setHideCol("none");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="none"?"var(--eng)":"transparent",color:hideCol==="none"?"#fff":"var(--muted)",fontWeight:hideCol==="none"?600:400}},"Pokaż wszystko"),
+    React.createElement("button",{onClick:function(){setHideCol("pl");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="pl"?"var(--eng)":"transparent",color:hideCol==="pl"?"#fff":"var(--muted)",fontWeight:hideCol==="pl"?600:400}},"🇵🇱 Zakryj PL"),
+    React.createElement("button",{onClick:function(){setHideCol("en");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="en"?"var(--eng)":"transparent",color:hideCol==="en"?"#fff":"var(--muted)",fontWeight:hideCol==="en"?600:400}},"🇬🇧 Zakryj EN")
+  ), addingSec && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 8,
@@ -6604,7 +6612,8 @@ var EngWords = function EngWords(_ref14) {
         style: {
           fontSize: 13,
           borderColor: w.status === 'red' ? '#ef4444' : w.status === 'orange' ? '#f97316' : w.status === 'green' ? '#22c55e' : 'var(--border)',
-          background: w.status === 'red' ? 'rgba(239,68,68,.08)' : w.status === 'orange' ? 'rgba(249,115,22,.08)' : w.status === 'green' ? 'rgba(34,197,94,.08)' : 'var(--surface3)'
+          background: w.status === 'red' ? 'rgba(239,68,68,.08)' : w.status === 'orange' ? 'rgba(249,115,22,.08)' : w.status === 'green' ? 'rgba(34,197,94,.08)' : 'var(--surface3)',
+          visibility: hideCol === 'pl' ? 'hidden' : 'visible'
         }
       }), /*#__PURE__*/React.createElement("input", {
         value: w.en,
@@ -6613,7 +6622,8 @@ var EngWords = function EngWords(_ref14) {
         },
         placeholder: "english word...",
         style: {
-          fontSize: 13
+          fontSize: 13,
+          visibility: hideCol === 'en' ? 'hidden' : 'visible'
         }
       }), /*#__PURE__*/React.createElement("div", {
         style: {
@@ -12015,6 +12025,14 @@ var DiaryView = function DiaryView() {
         onBlur: function onBlur(e) {
           e.target.style.borderColor = 'transparent';
           e.target.style.background = 'transparent';
+        },
+        onKeyDown: function onKeyDown(e) {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            var all = Array.from(document.querySelectorAll('table input[type="number"]'));
+            var i = all.indexOf(e.target);
+            if (i >= 0 && i + 1 < all.length) all[i + 1].focus();
+          }
         }
       }));
     }), /*#__PURE__*/React.createElement("td", {
