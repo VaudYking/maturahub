@@ -9328,6 +9328,968 @@ var MathWarmup = function MathWarmup() {
 
 // ─── MATH VIEW (z zakładkami) ─────────────────────────────────────────────────
 
+// ─── POLISH CHAT (mini czat do notatek, zdjęć, rysunków) ─────────────────────
+var PolChat = function PolChat(_ref_pc) {
+  var messages = _ref_pc.messages, onSend = _ref_pc.onSend, onDelete = _ref_pc.onDelete, onClear = _ref_pc.onClear, color = _ref_pc.color;
+  color = color || 'var(--pol)';
+  var _t = useState(''), txt = _t[0], setTxt = _t[1];
+  var _lb = useState(null), lightbox = _lb[0], setLightbox = _lb[1];
+  var _sp = useState(false), showPaint = _sp[0], setShowPaint = _sp[1];
+  var _ei = useState(null), editImg = _ei[0], setEditImg = _ei[1];
+  var bottomRef = useRef(); var fileRef = useRef(); var inputRef = useRef();
+
+  useEffect(function(){
+    setTimeout(function(){ if(bottomRef.current) bottomRef.current.scrollIntoView({behavior:'smooth'}); }, 50);
+  }, [messages.length]);
+
+  function send(msg) { onSend(msg); }
+  function sendText() {
+    if (!txt.trim()) return;
+    send({id:'pc_'+Date.now(), type:'text', text:txt.trim(), time:new Date().toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})});
+    setTxt(''); if(inputRef.current) inputRef.current.focus();
+  }
+  function sendImage(dataUrl) {
+    compressImage(dataUrl,1200,0.75).then(function(c){
+      send({id:'pc_'+Date.now(), type:'image', src:c, time:new Date().toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit'})});
+    });
+  }
+  function handleFile(e) {
+    Array.from(e.target.files||[]).forEach(function(file){
+      var r=new FileReader(); r.onload=function(ev){sendImage(ev.target.result);}; r.readAsDataURL(file);
+    }); e.target.value='';
+  }
+  function handlePaste(e) {
+    Array.from((e.clipboardData&&e.clipboardData.items)||[]).forEach(function(item){
+      if(item.type.startsWith('image/')){var r=new FileReader(); r.onload=function(ev){sendImage(ev.target.result);}; r.readAsDataURL(item.getAsFile());}
+    });
+  }
+  function handleKey(e){ if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendText();} }
+  function saveEditedImage(dataUrl) {
+    if(!editImg) return;
+    compressImage(dataUrl,1200,0.75).then(function(c){
+      var updated=messages.map(function(m){return m.id===editImg.msgId?Object.assign({},m,{src:c}):m;});
+      onClear(); updated.forEach(function(m){onSend(m,'replace');});
+      setEditImg(null);
+    });
+  }
+
+  return React.createElement('div',{style:{display:'flex',flexDirection:'column',height:'100%',minHeight:300}},
+    lightbox && React.createElement('div',{onClick:function(){setLightbox(null);},style:{
+      position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',cursor:'zoom-out'
+    }}, React.createElement('img',{src:lightbox,style:{maxWidth:'95vw',maxHeight:'90vh',borderRadius:8}})),
+    editImg && React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9998,background:'var(--surface)'}},
+      React.createElement(MiniPaint,{
+        initialImage:editImg.src,
+        onSave:function(d){saveEditedImage(d);},
+        onClose:function(){setEditImg(null);}
+      })
+    ),
+    showPaint && React.createElement('div',{style:{position:'fixed',inset:0,zIndex:9997,background:'var(--surface)'}},
+      React.createElement(MiniPaint,{
+        onSave:function(d){sendImage(d);setShowPaint(false);},
+        onClose:function(){setShowPaint(false);}
+      })
+    ),
+    // Wiadomości
+    React.createElement('div',{style:{flex:1,overflowY:'auto',padding:'8px 0',display:'flex',flexDirection:'column',gap:8,minHeight:200,maxHeight:420}},
+      messages.length===0 && React.createElement('div',{style:{textAlign:'center',padding:'32px 0',color:'var(--muted)'}},
+        React.createElement('div',{style:{fontSize:32,marginBottom:8}},'📝'),
+        React.createElement('div',{style:{fontSize:13}},'Tu zapisuj notatki, zdjęcia i rysunki do tej zakładki')
+      ),
+      messages.map(function(m){
+        return React.createElement('div',{key:m.id,style:{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:2}},
+          m.type==='text' && React.createElement('div',{style:{
+            background:color+'22',border:'1px solid '+color+'44',borderRadius:'12px 12px 2px 12px',
+            padding:'8px 12px',maxWidth:'85%',fontSize:13,color:'var(--text)',lineHeight:1.5,wordBreak:'break-word'
+          }},m.text),
+          m.type==='image' && React.createElement('div',{style:{position:'relative'}},
+            React.createElement('img',{src:m.src,onClick:function(){setLightbox(m.src);},style:{maxWidth:220,maxHeight:180,borderRadius:10,cursor:'zoom-in',display:'block'}}),
+            React.createElement('button',{onClick:function(){setEditImg({msgId:m.id,src:m.src});},style:{position:'absolute',top:4,right:4,background:'rgba(0,0,0,.55)',border:'none',color:'#fff',borderRadius:6,padding:'2px 6px',fontSize:10,cursor:'pointer'}},'✏️')
+          ),
+          React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+            React.createElement('span',{style:{fontSize:10,color:'var(--muted)'}},(m.time||'')),
+            React.createElement('button',{onClick:function(){onDelete(m.id);},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:10,padding:0}},'✕')
+          )
+        );
+      }),
+      React.createElement('div',{ref:bottomRef})
+    ),
+    // Input
+    React.createElement('div',{style:{borderTop:'1px solid var(--border)',paddingTop:10,marginTop:8}},
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'flex-end'}},
+        React.createElement('div',{style:{flex:1,display:'flex',gap:6,alignItems:'flex-end',background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'8px 10px'}},
+          React.createElement('textarea',{ref:inputRef,value:txt,onChange:function(e){setTxt(e.target.value);},onKeyDown:handleKey,onPaste:handlePaste,
+            placeholder:'Notatka, cytat, myśl... (Enter = wyślij)',rows:1,
+            style:{flex:1,background:'none',border:'none',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'none',outline:'none',lineHeight:1.4}
+          }),
+          React.createElement('button',{onClick:function(){setShowPaint(true);},title:'Rysuj',style:{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:0,color:'var(--muted)'}},'🎨'),
+          React.createElement('button',{onClick:function(){fileRef.current&&fileRef.current.click();},title:'Zdjęcie',style:{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:0,color:'var(--muted)'}},'📷')
+        ),
+        React.createElement('button',{onClick:sendText,disabled:!txt.trim(),style:{
+          background:txt.trim()?color:'var(--surface3)',color:txt.trim()?'#fff':'var(--muted)',
+          border:'none',borderRadius:10,width:40,height:40,cursor:txt.trim()?'pointer':'not-allowed',fontSize:16,flexShrink:0
+        }},'→'),
+        React.createElement('input',{ref:fileRef,type:'file',accept:'image/*',multiple:true,style:{display:'none'},onChange:handleFile})
+      ),
+      messages.length>0 && React.createElement('button',{onClick:onClear,style:{fontSize:10,color:'var(--muted)',background:'none',border:'none',cursor:'pointer',marginTop:6,fontFamily:'Outfit,sans-serif'}},'🗑 Wyczyść notatki')
+    )
+  );
+};
+
+// ─── POLISH STORAGE ───────────────────────────────────────────────────────────
+var POL_STORAGE_KEY = 'polishData_v2';
+function polLoad() { try { return JSON.parse(localStorage.getItem(POL_STORAGE_KEY)||'{}'); } catch(e) { return {}; } }
+function polSave(d) { try { localStorage.setItem(POL_STORAGE_KEY, JSON.stringify(d)); } catch(e) {} }
+
+var INITIAL_LEKTURY = [
+  {id:'l_antygona',tytul:'Antygona',autor:'Sofokles',epoka:'Antyk',gatunek:'Tragedia',opis:'Konflikt między prawem boskim a ludzkim. Antygona chce pochować brata Polinejkesa wbrew zakazowi Kreona.',bohaterowie:'Antygona, Kreon, Hajmon, Ismena, Tyrezjasz',motywy:'bunt, prawo, śmierć, obowiązek, tragizm',teza:'Antyk ukazuje nierozwiązywalny konflikt między jednostką a państwem.',done:false,chat:[]},
+  {id:'l_biblia',tytul:'Biblia (fragmenty)',autor:'–',epoka:'Antyk',gatunek:'Księga święta',opis:'Stary i Nowy Testament – Księga Hioba, Psalmy, Apokalipsa, Pieśń nad Pieśniami.',bohaterowie:'Hiob, Dawid, Jan Ewangelista',motywy:'cierpienie, wiara, apokalipsa, miłość, nadzieja',teza:'Biblia wyznacza wzorce etyczne i kulturowe cywilizacji zachodniej.',done:false,chat:[]},
+  {id:'l_makbet',tytul:'Makbet',autor:'William Szekspir',epoka:'Renesans',gatunek:'Tragedia',opis:'Historia szkockiego wodza, który po przepowiedni wiedźm morduje króla i sam sięga po władzę.',bohaterowie:'Makbet, Lady Makbet, Dunkan, Macduff, Banquo',motywy:'władza, zbrodnia, wina, ambicja, przepowiednia, szaleństwo',teza:'Makbet pokazuje, jak żądza władzy prowadzi do moralnego upadku.',done:false,chat:[]},
+  {id:'l_skapiec',tytul:'Skąpiec',autor:'Molier',epoka:'Klasycyzm',gatunek:'Komedia',opis:'Harpagon – skąpiec, którego obsesja na punkcie pieniędzy niszczy relacje z dziećmi.',bohaterowie:'Harpagon, Kleant, Eliza, Walery, Mariana',motywy:'skąpstwo, komizm, miłość vs pieniądze, rodzina',teza:'Komedia demaskuje ludzkie wady przez satyrę i śmiech.',done:false,chat:[]},
+  {id:'l_dziady2',tytul:'Dziady cz. II',autor:'Adam Mickiewicz',epoka:'Romantyzm',gatunek:'Dramat romantyczny',opis:'Obrzęd przywoływania duchów – każdy duch opowiada o swoich przewinach.',bohaterowie:'Guślarz, Widmo Złego Pana, Zosia, Dziecięta',motywy:'duchy, obrzęd, wina, kara, pamięć, śmierć',teza:'Romantycy wierzyli w łączność żywych i umarłych.',done:false,chat:[]},
+  {id:'l_dziady3',tytul:'Dziady cz. III',autor:'Adam Mickiewicz',epoka:'Romantyzm',gatunek:'Dramat romantyczny',opis:'Martyrologia narodu polskiego pod zaborem rosyjskim. Konrad buntuje się przeciw Bogu.',bohaterowie:'Konrad, ksiądz Piotr, Ewa, senator Nowosilcow',motywy:'wolność, mesjanizm, cierpienie narodu, bunt, Wielka Improwizacja',teza:'Polska jako Chrystus narodów – mesjanizm romantyczny.',done:false,chat:[]},
+  {id:'l_pan_tadeusz',tytul:'Pan Tadeusz',autor:'Adam Mickiewicz',epoka:'Romantyzm',gatunek:'Epopeja narodowa',opis:'Obraz szlachty litewskiej na tle napoleońskim. Miłość Tadeusza i Zosi.',bohaterowie:'Tadeusz, Zosia, Jacek Soplica/ks. Robak, Gerwazy, Hrabia',motywy:'ojczyzna, miłość, natura, tradycja, zemsta, odkupienie',teza:'Pan Tadeusz to hołd złożony utraconej ojczyźnie i szlacheckiej tradycji.',done:false,chat:[]},
+  {id:'l_lalka',tytul:'Lalka',autor:'Bolesław Prus',epoka:'Pozytywizm',gatunek:'Powieść realistyczna',opis:'Stanisław Wokulski – kupiec zakochany w arystokratce Izabeli Łęckiej. Panorama społeczeństwa XIX w.',bohaterowie:'Wokulski, Rzecki, Izabela Łęcka, Ochocki',motywy:'miłość, klasy społeczne, idealizm, rozczarowanie, praca',teza:'Pozytywizm ukazuje konflikt między idealizmem a pragmatyzmem społecznym.',done:false,chat:[]},
+  {id:'l_wesele',tytul:'Wesele',autor:'Stanisław Wyspiański',epoka:'Młoda Polska',gatunek:'Dramat symboliczny',opis:'Wesele chłopki i inteligenta w Bronowicach. Chocholi taniec jako symbol marazmu.',bohaterowie:'Pan Młody, Panna Młoda, Chochoł, Wernyhora, Dziennikarz',motywy:'chochoł, złoty róg, marazm, inteligencja vs lud',teza:'Wesele krytykuje niemoc polskiej inteligencji.',done:false,chat:[]},
+  {id:'l_zbrodnia',tytul:'Zbrodnia i kara',autor:'Fiodor Dostojewski',epoka:'Realizm',gatunek:'Powieść psychologiczna',opis:'Raskolnikow zabija lichwiarzkę, przekonany o własnej wyjątkowości.',bohaterowie:'Raskolnikow, Sonia, Dunya, Porfiry',motywy:'zbrodnia, kara, wina, nadczłowiek, cierpienie, odkupienie',teza:'Żadna idea nie może usprawiedliwić zbrodni.',done:false,chat:[]},
+  {id:'l_przedwiosnie',tytul:'Przedwiośnie',autor:'Stefan Żeromski',epoka:'Dwudziestolecie',gatunek:'Powieść',opis:'Cezary Baryka szuka swojego miejsca w odrodzonej Polsce. Trzy wizje jej urządzenia.',bohaterowie:'Cezary Baryka, Seweryn Baryka, Szymon Gajowiec',motywy:'szklane domy, rewolucja, rozczarowanie, Polska, tożsamość',teza:'Żeromski krytykuje zarówno utopijny idealizm, jak i rewolucję.',done:false,chat:[]},
+  {id:'l_process',tytul:'Proces',autor:'Franz Kafka',epoka:'Dwudziestolecie',gatunek:'Powieść',opis:'Józef K. zostaje oskarżony, nie wiedząc o co. Absurd biurokratyczny.',bohaterowie:'Józef K., prokurator, ksiądz, adwokat',motywy:'absurd, wina, alienacja, biurokracja, władza',teza:'Nowoczesne systemy władzy redukują człowieka do trybu w machinie.',done:false,chat:[]},
+  {id:'l_dzuma',tytul:'Dżuma',autor:'Albert Camus',epoka:'Współczesność',gatunek:'Powieść',opis:'Epidemia dżumy w Oranie – metafora zła. Doktor Rieux walczy mimo beznadziei.',bohaterowie:'doktor Rieux, Tarrou, Rambert, Cottard',motywy:'absurd, solidarność, bunt, śmierć, zło, heroizm bez nagrody',teza:'Wobec absurdu istnienia jedyną odpowiedzią jest bunt i solidarność.',done:false,chat:[]},
+  {id:'l_inny_swiat',tytul:'Inny świat',autor:'Gustaw Herling-Grudziński',epoka:'Współczesność',gatunek:'Proza dokumentalna',opis:'Autobiograficzny opis pobytu autora w sowieckim łagrze.',bohaterowie:'narrator, Kostylew, Jewgienija, Natalia Lwowna',motywy:'łagier, godność, dehumanizacja, wolność, przetrwanie',teza:'Totalitaryzm niszczy człowieczeństwo – świadectwo jest moralnym obowiązkiem.',done:false,chat:[]},
+  {id:'l_zdazyc',tytul:'Zdążyć przed Panem Bogiem',autor:'Hanna Krall',epoka:'Współczesność',gatunek:'Reportaż',opis:'Rozmowa z Markiem Edelmanem – ostatnim dowódcą powstania w getcie.',bohaterowie:'Marek Edelman, narrator (Krall)',motywy:'Holokaust, bunt, wybór, śmierć, pamięć, godność',teza:'Powstanie w getcie było wyborem godnej śmierci, nie wiary w zwycięstwo.',done:false,chat:[]},
+  {id:'l_kamienie',tytul:'Kamienie na szaniec',autor:'Aleksander Kamiński',epoka:'Współczesność',gatunek:'Powieść dokumentalna',opis:'Historia Alka, Rudego i Zośki – harcerzy Szarych Szeregów.',bohaterowie:'Alek Dawidowski, Jan Bytnar (Rudy), Tadeusz Zawadzki (Zośka)',motywy:'patriotyzm, przyjaźń, poświęcenie, młodość, konspiracja',teza:'Młodzi ludzie potrafią poświęcić życie za wartości.',done:false,chat:[]},
+  {id:'l_ferdydurke',tytul:'Ferdydurke',autor:'Witold Gombrowicz',epoka:'Dwudziestolecie',gatunek:'Powieść',opis:'Jonek zostaje przez prof. Pimkę "upupiony" – cofnięty do stanu ucznia. Groteska i forma.',bohaterowie:'Józio (Jonek), profesor Pimko, Miętus, Młodziakowie',motywy:'forma, gęba, pupa, niedojrzałość, groteska, konformizm, bunt',teza:'Człowiek jest więźniem formy – ról i masek narzucanych przez społeczeństwo.',done:false,chat:[]},
+];
+
+var INITIAL_MOTYWY = [
+  {id:'mot_mlosc',nazwa:'Miłość',kolor:'#ec4899',opis:'Jeden z najważniejszych motywów literatury. Od miłości romantycznej, przez niespełnioną, po destrukcyjną.',przyklady:[{dzielo:'Pan Tadeusz',autor:'Mickiewicz',omowienie:'Miłość Tadeusza i Zosi – czysta, sielankowa, symbolizująca powrót do korzeni.'},{dzielo:'Lalka',autor:'Prus',omowienie:'Obsesyjna miłość Wokulskiego do Izabeli Łęckiej – prowadzi do klęski idealisty.'}],chat:[]},
+  {id:'mot_smierc',nazwa:'Śmierć',kolor:'#6b7280',opis:'Śmierć jako granica, próba, kara lub wyzwolenie.',przyklady:[{dzielo:'Antygona',autor:'Sofokles',omowienie:'Śmierć jako konsekwencja wierności zasadom.'},{dzielo:'Makbet',autor:'Szekspir',omowienie:'Śmierć jako skutek zbrodni i przekleństwa ambicji.'}],chat:[]},
+  {id:'mot_wolnosc',nazwa:'Wolność i bunt',kolor:'#f97316',opis:'Walka o wolność – narodową, jednostkową, egzystencjalną.',przyklady:[{dzielo:'Dziady cz. III',autor:'Mickiewicz',omowienie:'Wielka Improwizacja – bunt Konrada przeciw Bogu.'},{dzielo:'Dżuma',autor:'Camus',omowienie:'Bunt wobec absurdu – Rieux walczy mimo braku nadziei.'}],chat:[]},
+  {id:'mot_wina',nazwa:'Wina i kara',kolor:'#8b5cf6',opis:'Zbrodnia i jej konsekwencje moralne, psychologiczne i społeczne.',przyklady:[{dzielo:'Zbrodnia i kara',autor:'Dostojewski',omowienie:'Raskolnikow morduje i nie może uciec przed wyrzutami sumienia.'},{dzielo:'Makbet',autor:'Szekspir',omowienie:'Zbrodnia królobójstwa prowadzi do paranoi i zagłady.'}],chat:[]},
+  {id:'mot_ojczyzna',nazwa:'Ojczyzna i patriotyzm',kolor:'#ef4444',opis:'Polska w literaturze – od tęsknoty za utraconym krajem po krytykę społeczną.',przyklady:[{dzielo:'Pan Tadeusz',autor:'Mickiewicz',omowienie:'Litwa jako utracony raj – tęsknota emigranta.'},{dzielo:'Wesele',autor:'Wyspiański',omowienie:'Krytyka polskiej inteligencji niezdolnej do walki o wolność.'}],chat:[]},
+  {id:'mot_absurd',nazwa:'Absurd i egzystencjalizm',kolor:'#14b8a6',opis:'Człowiek wobec bezsensu istnienia.',przyklady:[{dzielo:'Dżuma',autor:'Camus',omowienie:'Absurd śmierci – Rieux buntuje się, działając mimo beznadziei.'},{dzielo:'Proces',autor:'Kafka',omowienie:'Józef K. skazany bez wyroku – absurd systemu.'}],chat:[]},
+  {id:'mot_historia',nazwa:'Człowiek wobec historii',kolor:'#0ea5e9',opis:'Jednostka uwikłana w wielkie wydarzenia historyczne.',przyklady:[{dzielo:'Przedwiośnie',autor:'Żeromski',omowienie:'Cezary między rewolucją a ideałem odrodzonej Polski.'},{dzielo:'Zdążyć przed Panem Bogiem',autor:'Krall',omowienie:'Edelman jako świadek Holokaustu.'}],chat:[]},
+  {id:'mot_dojrzewanie',nazwa:'Dojrzewanie i tożsamość',kolor:'#22c55e',opis:'Przejście z młodości w dorosłość, poszukiwanie własnego ja.',przyklady:[{dzielo:'Ferdydurke',autor:'Gombrowicz',omowienie:'Pimko cofa Józia do dzieciństwa – groteska jako krytyka infantylizacji.'},{dzielo:'Kamienie na szaniec',autor:'Kamiński',omowienie:'Harcerze dojrzewają przez wybór poświęcenia się ojczyźnie.'}],chat:[]},
+];
+
+var INITIAL_ZADANIA = [
+  {id:'zad1',typ:'Analiza wiersza',tresc:'Zanalizuj i zinterpretuj wiersz „Tren IX" Jana Kochanowskiego.',done:false,chat:[]},
+  {id:'zad2',typ:'Rozprawka',tresc:'Napisz rozprawkę: „Czy bunt jest konieczny do zachowania godności?" Odwołaj się do co najmniej dwóch lektur.',done:false,chat:[]},
+  {id:'zad3',typ:'Charakterystyka',tresc:'Scharakteryzuj Wokulskiego z „Lalki" Prusa.',done:false,chat:[]},
+  {id:'zad4',typ:'Porównanie',tresc:'Porównaj obraz cierpienia w „Dżumie" i „Innym świecie".',done:false,chat:[]},
+  {id:'zad5',typ:'Motyw',tresc:'Omów motyw winy i kary w „Zbrodni i karze" oraz „Makbecie".',done:false,chat:[]},
+  {id:'zad6',typ:'Kontekst',tresc:'Wyjaśnij pojęcie mesjanizmu w „Dziadach cz. III".',done:false,chat:[]},
+  {id:'zad7',typ:'Analiza',tresc:'Omów symbolikę Chochoła w „Weselu" Wyspiańskiego.',done:false,chat:[]},
+  {id:'zad8',typ:'Streszczenie',tresc:'Streść fabułę „Procesu" Kafki i wyjaśnij sens absurdu.',done:false,chat:[]},
+];
+
+var INITIAL_ROZPRAWKA = {
+  szablony:[
+    {id:'r_w1',typ:'wstep',label:'Wstęp – teza ogólna',tresc:'Od zarania dziejów literatura ukazuje, że [TEMAT] stanowi jeden z fundamentalnych aspektów ludzkiego doświadczenia.'},
+    {id:'r_w2',typ:'wstep',label:'Wstęp – pytanie retoryczne',tresc:'Pytanie o [TEMAT] nurtuje ludzkość od wieków – literatura staje się przestrzenią poszukiwania odpowiedzi.'},
+    {id:'r_a1',typ:'argument',label:'Argument z lektury',tresc:'Pragnę udowodnić, że [teza]. Potwierdza to przykład z [lektury] – [opis sytuacji]. Autor ukazuje w ten sposób, że [wniosek].'},
+    {id:'r_a2',typ:'argument',label:'Argument z bohaterem',tresc:'Doskonałym przykładem jest [bohater] z [lektury]. [Opis postaci]. Świadczy to o tym, że [wniosek].'},
+    {id:'r_a3',typ:'kontr',label:'Kontrargument',tresc:'Z drugiej strony, można twierdzić, że [kontrargument]. Przykładem jest [lektura]. Jednakże [obalenie kontrargumentu].'},
+    {id:'r_z1',typ:'zakonczenie',label:'Zakończenie – podsumowanie',tresc:'Reasumując, przedstawione argumenty jednoznacznie wskazują, że [powtórzenie tezy]. Literatura niezmiennie potwierdza, że [refleksja ogólna].'},
+    {id:'r_z2',typ:'zakonczenie',label:'Zakończenie z pytaniem',tresc:'Przywołane przykłady dowodzą, że [teza]. To skłania do refleksji: [pytanie retoryczne lub myśl na zakończenie].'},
+  ],
+  slownictwo:['Pragnę udowodnić, że...','Należy zaznaczyć, iż...','Potwierdzeniem tej tezy jest...','Warto w tym kontekście przywołać...','Co więcej,...','Mimo to, warto zauważyć, że...','Autor ukazuje w ten sposób...','Podsumowując rozważania...','Wbrew pozorom...','Nie sposób pominąć faktu, że...','Kluczowym argumentem jest...','Należy podkreślić, że...','Z całą pewnością...','Z perspektywy [bohatera]...','Jak wynika z analizy...'],
+  checklista:[
+    {id:'ch1',txt:'Teza we wstępie sformułowana wyraźnie',done:false},
+    {id:'ch2',txt:'Co najmniej 2 argumenty z odwołaniem do lektur',done:false},
+    {id:'ch3',txt:'Każdy akapit zaczyna się od nowej myśli',done:false},
+    {id:'ch4',txt:'Wnioski logicznie wynikają z argumentów',done:false},
+    {id:'ch5',txt:'Zakończenie nawiązuje do tezy (bez kopiowania)',done:false},
+    {id:'ch6',txt:'Spójniki logiczne między zdaniami',done:false},
+    {id:'ch7',txt:'Brak błędów ortograficznych i interpunkcyjnych',done:false},
+    {id:'ch8',txt:'Objętość min. 250 słów',done:false},
+    {id:'ch9',txt:'Styl formalny – brak kolokwializmów',done:false},
+    {id:'ch10',txt:'Tytuły lektur kursywą lub w cudzysłowie',done:false},
+  ],
+  chat:[],
+};
+
+// ─── POLISH VIEW ──────────────────────────────────────────────────────────────
+var PolishView = function PolishView(_ref_pol) {
+  var subject = _ref_pol.subject, onUpdate = _ref_pol.onUpdate;
+  var _pt = useState('dzialy'), polTab = _pt[0], setPolTab = _pt[1];
+  var _pd = useState(function(){ return polLoad(); }), polData = _pd[0], setPolData = _pd[1];
+
+  function savePolData(d){ setPolData(d); polSave(d); }
+  function mergeList(key, init){ return polData[key] || init; }
+
+  var lektury = mergeList('lektury', INITIAL_LEKTURY);
+  var motywy = mergeList('motywy', INITIAL_MOTYWY);
+  var zadania = mergeList('zadania', INITIAL_ZADANIA);
+  var rozprawka = mergeList('rozprawka', INITIAL_ROZPRAWKA);
+
+  function updLektury(fn){ var n=fn(lektury); savePolData(Object.assign({},polData,{lektury:n})); }
+  function updMotywy(fn){ var n=fn(motywy); savePolData(Object.assign({},polData,{motywy:n})); }
+  function updZadania(fn){ var n=fn(zadania); savePolData(Object.assign({},polData,{zadania:n})); }
+  function updRozprawka(fn){ var n=fn(rozprawka); savePolData(Object.assign({},polData,{rozprawka:n})); }
+
+  var TABS=[{id:'dzialy',l:'Działy',e:'📚'},{id:'lektury',l:'Lektury',e:'📖'},{id:'motywy',l:'Motywy',e:'🎭'},{id:'zadania',l:'Zadania',e:'✏️'},{id:'rozprawka',l:'Rozprawka',e:'📝'}];
+
+  return React.createElement('div',{className:'fade-in'},
+    React.createElement('div',{style:{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)',overflowX:'auto'}},
+      TABS.map(function(t){
+        var a=polTab===t.id;
+        return React.createElement('button',{key:t.id,onClick:function(){setPolTab(t.id);},style:{
+          padding:'10px 14px',border:'none',background:'none',cursor:'pointer',whiteSpace:'nowrap',
+          fontFamily:'Outfit,sans-serif',fontSize:13,fontWeight:a?600:400,
+          color:a?'var(--pol)':'var(--muted)',borderBottom:a?'2px solid var(--pol)':'2px solid transparent',
+          transition:'all .15s',marginBottom:-1
+        }},t.e+' '+t.l);
+      })
+    ),
+    polTab==='dzialy'   && React.createElement(SubjectView,{subject:subject,onUpdate:onUpdate,searchQuery:''}),
+    polTab==='lektury'  && React.createElement(PolLektury,{lektury:lektury,onUpdate:updLektury}),
+    polTab==='motywy'   && React.createElement(PolMotywy,{motywy:motywy,onUpdate:updMotywy}),
+    polTab==='zadania'  && React.createElement(PolZadania,{zadania:zadania,onUpdate:updZadania}),
+    polTab==='rozprawka'&& React.createElement(PolRozprawka,{rozprawka:rozprawka,onUpdate:updRozprawka})
+  );
+};
+
+// ── helpers ──
+function polChatSend(list, setFn, itemId, msg){
+  setFn(function(prev){ return prev.map(function(x){ return x.id===itemId ? Object.assign({},x,{chat:(x.chat||[]).concat([msg])}) : x; }); });
+}
+function polChatDelete(list, setFn, itemId, msgId){
+  setFn(function(prev){ return prev.map(function(x){ return x.id===itemId ? Object.assign({},x,{chat:(x.chat||[]).filter(function(m){return m.id!==msgId;})}) : x; }); });
+}
+function polChatClear(list, setFn, itemId){
+  setFn(function(prev){ return prev.map(function(x){ return x.id===itemId ? Object.assign({},x,{chat:[]}) : x; }); });
+}
+
+// ── LEKTURY ──
+var PolLektury = function PolLektury(_ref_l) {
+  var lektury = _ref_l.lektury, onUpdate = _ref_l.onUpdate;
+  var _ls = useState(null), sel = _ls[0], setSel = _ls[1];
+  var _lf = useState(''), filter = _lf[0], setFilter = _lf[1];
+  var _ep = useState('all'), epoka = _ep[0], setEpoka = _ep[1];
+  var _adding = useState(false), adding = _adding[0], setAdding = _adding[1];
+  var _nlek = useState({tytul:'',autor:'',epoka:'',gatunek:'',opis:'',bohaterowie:'',motywy:'',teza:''}), nlek = _nlek[0], setNlek = _nlek[1];
+  var _editing = useState(null), editingId = _editing[0], setEditingId = _editing[1];
+
+  var epoki = ['all'].concat(Array.from(new Set(lektury.map(function(l){return l.epoka;}))));
+  var filtered = lektury.filter(function(l){
+    return (epoka==='all'||l.epoka===epoka) && (!filter||l.tytul.toLowerCase().includes(filter.toLowerCase())||l.autor.toLowerCase().includes(filter.toLowerCase()));
+  });
+  var doneCount = lektury.filter(function(l){return l.done;}).length;
+
+  function toggleDone(id){ onUpdate(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,{done:!l.done}):l;})}); }
+  function addLektura(){
+    if(!nlek.tytul.trim()) return;
+    var nl=Object.assign({id:'l_'+Date.now(),done:false,chat:[]},nlek);
+    onUpdate(function(prev){return prev.concat([nl]);}); setNlek({tytul:'',autor:'',epoka:'',gatunek:'',opis:'',bohaterowie:'',motywy:'',teza:''}); setAdding(false);
+  }
+  function deleteLektura(id){ if(!window.confirm('Usunąć tę lekturę?')) return; onUpdate(function(prev){return prev.filter(function(l){return l.id!==id;})}); setSel(null); }
+  function saveEdit(id, field, val){ onUpdate(function(prev){return prev.map(function(l){return l.id===id?Object.assign({},l,_defineProperty({},field,val)):l;})}); }
+
+  var lek = sel ? lektury.find(function(l){return l.id===sel;}) : null;
+
+  if (lek) {
+    var editing = editingId === lek.id;
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+        React.createElement('button',{onClick:function(){setSel(null);setEditingId(null);},style:{background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,fontFamily:'Outfit,sans-serif',display:'flex',alignItems:'center',gap:6}},'← Wróć'),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:function(){setEditingId(editing?null:lek.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid '+(editing?'var(--pol)':'var(--border)'),background:editing?'rgba(239,68,68,.1)':'transparent',color:editing?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},editing?'✓ Gotowe':'✏️ Edytuj'),
+          React.createElement('button',{onClick:function(){deleteLektura(lek.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(239,68,68,.3)',color:'#ef4444',background:'none',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},'🗑 Usuń')
+        )
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'16px',marginBottom:16}},
+        editing ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
+          [['tytul','Tytuł'],['autor','Autor'],['epoka','Epoka'],['gatunek','Gatunek']].map(function(f){
+            return React.createElement('div',{key:f[0]},
+              React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginBottom:3}}),
+              React.createElement('input',{value:lek[f[0]]||'',onChange:function(e){saveEdit(lek.id,f[0],e.target.value);},placeholder:f[1],
+                style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',boxSizing:'border-box'}})
+            );
+          }),
+          [['opis','Opis / Fabuła'],['bohaterowie','Bohaterowie'],['motywy','Motywy'],['teza','Teza / Interpretacja']].map(function(f){
+            return React.createElement('textarea',{key:f[0],value:lek[f[0]]||'',onChange:function(e){saveEdit(lek.id,f[0],e.target.value);},placeholder:f[1],rows:2,
+              style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'vertical',boxSizing:'border-box'}});
+          })
+        ) : React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12,flexWrap:'wrap',gap:8}},
+            React.createElement('div',null,
+              React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:19,fontWeight:700,color:'var(--pol)'}},lek.tytul),
+              React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginTop:2}},lek.autor+' · '+lek.epoka+' · '+lek.gatunek)
+            ),
+            React.createElement('button',{onClick:function(){toggleDone(lek.id);},style:{padding:'6px 14px',borderRadius:9,border:'1px solid '+(lek.done?'#22c55e':'var(--border)'),background:lek.done?'rgba(34,197,94,.12)':'transparent',color:lek.done?'#22c55e':'var(--muted)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},lek.done?'✓ Opanowana':'Zaznacz jako opanowaną')
+          ),
+          lek.opis && React.createElement('p',{style:{fontSize:13,color:'var(--text)',lineHeight:1.6,margin:'0 0 10px'}},lek.opis),
+          React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}},
+            lek.bohaterowie && React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:9,padding:'10px'}},
+              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:4}},'Bohaterowie'),
+              React.createElement('p',{style:{fontSize:12,color:'var(--text)',margin:0,lineHeight:1.5}},lek.bohaterowie)
+            ),
+            lek.motywy && React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:9,padding:'10px'}},
+              React.createElement('div',{style:{fontSize:10,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:4}},'Motywy'),
+              React.createElement('p',{style:{fontSize:12,color:'var(--text)',margin:0,lineHeight:1.5}},lek.motywy)
+            )
+          ),
+          lek.teza && React.createElement('div',{style:{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.2)',borderRadius:9,padding:'10px'}},
+            React.createElement('div',{style:{fontSize:10,color:'#8b5cf6',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:4}},'Teza / Interpretacja'),
+            React.createElement('p',{style:{fontSize:12,color:'var(--text)',margin:0,lineHeight:1.5,fontStyle:'italic'}},lek.teza)
+          )
+        )
+      ),
+      // Czat
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}},'📝 Notatki i zdjęcia do tej lektury'),
+        React.createElement(PolChat,{
+          messages:lek.chat||[],
+          color:'var(--pol)',
+          onSend:function(msg){ onUpdate(function(prev){return prev.map(function(l){return l.id===lek.id?Object.assign({},l,{chat:(l.chat||[]).concat([msg])}):l;})}); },
+          onDelete:function(msgId){ onUpdate(function(prev){return prev.map(function(l){return l.id===lek.id?Object.assign({},l,{chat:(l.chat||[]).filter(function(m){return m.id!==msgId;})}):l;})}); },
+          onClear:function(){ onUpdate(function(prev){return prev.map(function(l){return l.id===lek.id?Object.assign({},l,{chat:[]}):l;})}); }
+        })
+      )
+    );
+  }
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:12,alignItems:'center',flexWrap:'wrap'}},
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:9,padding:'6px 12px',fontSize:12}},
+        React.createElement('span',{style:{color:'#22c55e',fontWeight:700}},doneCount),React.createElement('span',{style:{color:'var(--muted)'}},' / '+lektury.length+' opanowanych')
+      ),
+      React.createElement('div',{style:{flex:1,height:5,background:'var(--surface3)',borderRadius:3,minWidth:60}},
+        React.createElement('div',{style:{height:5,width:Math.round(doneCount/lektury.length*100)+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
+      ),
+      React.createElement('button',{onClick:function(){setAdding(true);},style:{padding:'6px 14px',borderRadius:9,border:'1px solid var(--pol)',background:'rgba(239,68,68,.1)',color:'var(--pol)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'+  Dodaj lekturę')
+    ),
+    adding && React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'14px',marginBottom:14}},
+      React.createElement('div',{style:{fontWeight:600,fontSize:13,marginBottom:10,color:'var(--pol)'}},'Nowa lektura'),
+      React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}},
+        [['tytul','Tytuł *'],['autor','Autor'],['epoka','Epoka'],['gatunek','Gatunek']].map(function(f){
+          return React.createElement('input',{key:f[0],value:nlek[f[0]],onChange:function(e){setNlek(Object.assign({},nlek,_defineProperty({},f[0],e.target.value)));},placeholder:f[1],
+            style:{padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif'}});
+        })
+      ),
+      [['opis','Opis / Fabuła'],['bohaterowie','Bohaterowie (oddziel przecinkiem)'],['motywy','Motywy (oddziel przecinkiem)'],['teza','Teza / Interpretacja']].map(function(f){
+        return React.createElement('textarea',{key:f[0],value:nlek[f[0]],onChange:function(e){setNlek(Object.assign({},nlek,_defineProperty({},f[0],e.target.value)));},placeholder:f[1],rows:2,
+          style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif',marginBottom:6,resize:'vertical',boxSizing:'border-box'}});
+      }),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('button',{onClick:addLektura,style:{background:'var(--pol)',color:'#fff',border:'none',padding:'7px 18px',borderRadius:8,cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'Dodaj'),
+        React.createElement('button',{onClick:function(){setAdding(false);},style:{background:'none',border:'1px solid var(--border)',padding:'7px 14px',borderRadius:8,cursor:'pointer',fontSize:12,color:'var(--muted)',fontFamily:'Outfit,sans-serif'}},'Anuluj')
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:10}},
+      epoki.map(function(ep){var a=epoka===ep; return React.createElement('button',{key:ep,onClick:function(){setEpoka(ep);},style:{padding:'4px 10px',borderRadius:7,border:'1px solid '+(a?'var(--pol)':'var(--border)'),background:a?'rgba(239,68,68,.1)':'transparent',color:a?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif',fontWeight:a?600:400}},ep==='all'?'Wszystkie':ep);}),
+    ),
+    React.createElement('input',{type:'text',placeholder:'Szukaj...',value:filter,onChange:function(e){setFilter(e.target.value);},style:{width:'100%',padding:'8px 12px',borderRadius:9,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',marginBottom:12,boxSizing:'border-box'}}),
+    React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:7}},
+      filtered.map(function(lek){
+        return React.createElement('div',{key:lek.id,style:{background:'var(--surface2)',border:'1px solid '+(lek.done?'rgba(34,197,94,.3)':'var(--border)'),borderRadius:11,padding:'11px 13px',cursor:'pointer',display:'flex',alignItems:'center',gap:10},onClick:function(){setSel(lek.id);}},
+          React.createElement('div',{onClick:function(e){e.stopPropagation();toggleDone(lek.id);},style:{width:20,height:20,borderRadius:5,border:'2px solid '+(lek.done?'#22c55e':'var(--border)'),background:lek.done?'#22c55e':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,cursor:'pointer',transition:'all .15s'}},lek.done?React.createElement('span',{style:{color:'#fff',fontSize:11}},'✓'):null),
+          React.createElement('div',{style:{flex:1,minWidth:0}},
+            React.createElement('div',{style:{fontWeight:600,fontSize:13,color:lek.done?'#22c55e':'var(--text)',marginBottom:1}},lek.tytul),
+            React.createElement('div',{style:{fontSize:11,color:'var(--muted)'}},lek.autor+' · '+lek.epoka)
+          ),
+          (lek.chat&&lek.chat.length>0) && React.createElement('span',{style:{fontSize:10,color:'var(--pol)',background:'rgba(239,68,68,.1)',padding:'2px 6px',borderRadius:6}},lek.chat.length+' notatek'),
+          React.createElement('span',{style:{fontSize:11,color:'var(--muted)',opacity:.5}},'→')
+        );
+      })
+    )
+  );
+};
+
+// ── MOTYWY ──
+var PolMotywy = function PolMotywy(_ref_m) {
+  var motywy = _ref_m.motywy, onUpdate = _ref_m.onUpdate;
+  var _ms = useState(null), sel = _ms[0], setSel = _ms[1];
+  var _add = useState(false), adding = _add[0], setAdding = _add[1];
+  var _nm = useState({nazwa:'',kolor:'#6b7280',opis:''}), nm = _nm[0], setNm = _nm[1];
+  var _editM = useState(null), editingId = _editM[0], setEditingId = _editM[1];
+
+  function addMotyw(){
+    if(!nm.nazwa.trim()) return;
+    onUpdate(function(prev){return prev.concat([Object.assign({id:'mot_'+Date.now(),przyklady:[],chat:[]},nm)]);}); setNm({nazwa:'',kolor:'#6b7280',opis:''}); setAdding(false);
+  }
+  function deleteMotyw(id){ if(!window.confirm('Usunąć motyw?')) return; onUpdate(function(prev){return prev.filter(function(m){return m.id!==id;})}); setSel(null); }
+  function saveField(id,field,val){ onUpdate(function(prev){return prev.map(function(m){return m.id===id?Object.assign({},m,_defineProperty({},field,val)):m;})}); }
+  function addPrzyklad(id,p){ onUpdate(function(prev){return prev.map(function(m){return m.id===id?Object.assign({},m,{przyklady:(m.przyklady||[]).concat([p])}):m;})}); }
+  function deletePrzyklad(id,pi){ onUpdate(function(prev){return prev.map(function(m){return m.id===id?Object.assign({},m,{przyklady:(m.przyklady||[]).filter(function(_,i){return i!==pi;})}):m;})}); }
+
+  var mot = sel ? motywy.find(function(m){return m.id===sel;}) : null;
+
+  if (mot) {
+    var editing = editingId === mot.id;
+    var _np = useState({dzielo:'',autor:'',omowienie:''}), np = _np[0], setNp = _np[1];
+    var _addP = useState(false), addingP = _addP[0], setAddingP = _addP[1];
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+        React.createElement('button',{onClick:function(){setSel(null);setEditingId(null);},style:{background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,fontFamily:'Outfit,sans-serif'}},'← Wróć'),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:function(){setEditingId(editing?null:mot.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid '+(editing?'var(--pol)':'var(--border)'),background:editing?'rgba(239,68,68,.1)':'transparent',color:editing?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},editing?'✓ Gotowe':'✏️ Edytuj'),
+          React.createElement('button',{onClick:function(){deleteMotyw(mot.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(239,68,68,.3)',color:'#ef4444',background:'none',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},'🗑')
+        )
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px',marginBottom:12}},
+        editing ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center'}},
+            React.createElement('input',{type:'color',value:mot.kolor,onChange:function(e){saveField(mot.id,'kolor',e.target.value);},style:{width:36,height:36,border:'none',cursor:'pointer',background:'none',flexShrink:0}}),
+            React.createElement('input',{value:mot.nazwa,onChange:function(e){saveField(mot.id,'nazwa',e.target.value);},placeholder:'Nazwa motywu',style:{flex:1,padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:14,fontFamily:'Syne,sans-serif',fontWeight:700}})
+          ),
+          React.createElement('textarea',{value:mot.opis,onChange:function(e){saveField(mot.id,'opis',e.target.value);},placeholder:'Opis motywu...',rows:3,style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'vertical',boxSizing:'border-box'}})
+        ) : React.createElement('div',null,
+          React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:8}},
+            React.createElement('div',{style:{width:12,height:12,borderRadius:'50%',background:mot.kolor,flexShrink:0}}),
+            React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:18,fontWeight:700}},mot.nazwa)
+          ),
+          React.createElement('p',{style:{fontSize:13,color:'var(--muted)',lineHeight:1.6,margin:0}},mot.opis)
+        ),
+        // Przykłady
+        React.createElement('div',{style:{marginTop:14}},
+          React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:8}},'Realizacje w lekturach'),
+          (mot.przyklady||[]).map(function(p,i){
+            return React.createElement('div',{key:i,style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:9,padding:'10px',marginBottom:6,position:'relative'}},
+              React.createElement('div',{style:{fontWeight:600,fontSize:12,color:'var(--pol)',marginBottom:3}},p.dzielo,' ',React.createElement('span',{style:{color:'var(--muted)',fontWeight:400}},'– '+p.autor)),
+              React.createElement('p',{style:{fontSize:12,color:'var(--text)',margin:0,lineHeight:1.5}},p.omowienie),
+              editing && React.createElement('button',{onClick:function(){deletePrzyklad(mot.id,i);},style:{position:'absolute',top:6,right:6,background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:12}},'✕')
+            );
+          }),
+          editing && React.createElement('div',null,
+            addingP ? React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:9,padding:'10px',marginBottom:6}},
+              [['dzielo','Tytuł dzieła'],['autor','Autor']].map(function(f){return React.createElement('input',{key:f[0],value:np[f[0]],onChange:function(e){setNp(Object.assign({},np,_defineProperty({},f[0],e.target.value)));},placeholder:f[1],style:{width:'100%',padding:'6px 8px',borderRadius:7,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif',marginBottom:5,boxSizing:'border-box'}});}),
+              React.createElement('textarea',{value:np.omowienie,onChange:function(e){setNp(Object.assign({},np,{omowienie:e.target.value}));},placeholder:'Omówienie realizacji motywu...',rows:2,style:{width:'100%',padding:'6px 8px',borderRadius:7,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif',resize:'vertical',marginBottom:6,boxSizing:'border-box'}}),
+              React.createElement('div',{style:{display:'flex',gap:6}},
+                React.createElement('button',{onClick:function(){if(!np.dzielo.trim())return; addPrzyklad(mot.id,np); setNp({dzielo:'',autor:'',omowienie:''}); setAddingP(false);},style:{background:'var(--pol)',color:'#fff',border:'none',padding:'5px 14px',borderRadius:7,cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},'Dodaj'),
+                React.createElement('button',{onClick:function(){setAddingP(false);},style:{background:'none',border:'1px solid var(--border)',padding:'5px 10px',borderRadius:7,cursor:'pointer',fontSize:11,color:'var(--muted)',fontFamily:'Outfit,sans-serif'}},'Anuluj')
+              )
+            ) : React.createElement('button',{onClick:function(){setAddingP(true);},style:{width:'100%',padding:'7px',borderRadius:9,border:'1px dashed var(--border)',background:'none',color:'var(--muted)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',marginTop:4}},'+ Dodaj realizację w lekturze')
+          )
+        )
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}},'📝 Notatki i zdjęcia do tego motywu'),
+        React.createElement(PolChat,{messages:mot.chat||[],color:mot.kolor||'var(--pol)',
+          onSend:function(msg){onUpdate(function(prev){return prev.map(function(m){return m.id===mot.id?Object.assign({},m,{chat:(m.chat||[]).concat([msg])}):m;})});},
+          onDelete:function(msgId){onUpdate(function(prev){return prev.map(function(m){return m.id===mot.id?Object.assign({},m,{chat:(m.chat||[]).filter(function(c){return c.id!==msgId;})}):m;})});},
+          onClear:function(){onUpdate(function(prev){return prev.map(function(m){return m.id===mot.id?Object.assign({},m,{chat:[]}):m;})});}
+        })
+      )
+    );
+  }
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:12}},
+      React.createElement('button',{onClick:function(){setAdding(true);},style:{padding:'6px 14px',borderRadius:9,border:'1px solid var(--pol)',background:'rgba(239,68,68,.1)',color:'var(--pol)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'+  Nowy motyw')
+    ),
+    adding && React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'14px',marginBottom:14}},
+      React.createElement('div',{style:{fontWeight:600,fontSize:13,marginBottom:10,color:'var(--pol)'}},'Nowy motyw'),
+      React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:8}},
+        React.createElement('input',{type:'color',value:nm.kolor,onChange:function(e){setNm(Object.assign({},nm,{kolor:e.target.value}));},style:{width:36,height:36,border:'none',cursor:'pointer',background:'none',flexShrink:0}}),
+        React.createElement('input',{value:nm.nazwa,onChange:function(e){setNm(Object.assign({},nm,{nazwa:e.target.value}));},placeholder:'Nazwa motywu *',style:{flex:1,padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif'}})
+      ),
+      React.createElement('textarea',{value:nm.opis,onChange:function(e){setNm(Object.assign({},nm,{opis:e.target.value}));},placeholder:'Opis motywu...',rows:2,style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'vertical',marginBottom:8,boxSizing:'border-box'}}),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('button',{onClick:addMotyw,style:{background:'var(--pol)',color:'#fff',border:'none',padding:'7px 18px',borderRadius:8,cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'Dodaj'),
+        React.createElement('button',{onClick:function(){setAdding(false);},style:{background:'none',border:'1px solid var(--border)',padding:'7px 14px',borderRadius:8,cursor:'pointer',fontSize:12,color:'var(--muted)',fontFamily:'Outfit,sans-serif'}},'Anuluj')
+      )
+    ),
+    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}},
+      motywy.map(function(mot){
+        return React.createElement('div',{key:mot.id,onClick:function(){setSel(mot.id);},style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'14px',cursor:'pointer',transition:'all .15s'}},
+          React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mot.kolor,marginBottom:8}}),
+          React.createElement('div',{style:{fontWeight:600,fontSize:13,color:'var(--text)',marginBottom:4}},mot.nazwa),
+          React.createElement('div',{style:{fontSize:11,color:'var(--muted)'}},((mot.przyklady||[]).length)+' realizacji'),
+          (mot.chat&&mot.chat.length>0)&&React.createElement('div',{style:{fontSize:10,color:'var(--pol)',marginTop:4}},mot.chat.length+' notatek')
+        );
+      })
+    )
+  );
+};
+
+// ── ZADANIA ──
+var PolZadania = function PolZadania(_ref_z) {
+  var zadania = _ref_z.zadania, onUpdate = _ref_z.onUpdate;
+  var _zs = useState(null), sel = _zs[0], setSel = _zs[1];
+  var _za = useState(false), adding = _za[0], setAdding = _za[1];
+  var _nz = useState({typ:'',tresc:''}), nz = _nz[0], setNz = _nz[1];
+  var _zf = useState('all'), filter = _zf[0], setFilter = _zf[1];
+  var _edit = useState(null), editId = _edit[0], setEditId = _edit[1];
+
+  function addZad(){ if(!nz.tresc.trim()) return; onUpdate(function(prev){return prev.concat([Object.assign({id:'zad_'+Date.now(),done:false,chat:[]},nz)]);}); setNz({typ:'',tresc:''}); setAdding(false); }
+  function deleteZad(id){ if(!window.confirm('Usunąć zadanie?')) return; onUpdate(function(prev){return prev.filter(function(z){return z.id!==id;})}); setSel(null); }
+  function toggleDone(id){ onUpdate(function(prev){return prev.map(function(z){return z.id===id?Object.assign({},z,{done:!z.done}):z;})}); }
+  function saveField(id,f,v){ onUpdate(function(prev){return prev.map(function(z){return z.id===id?Object.assign({},z,_defineProperty({},f,v)):z;})}); }
+
+  var filtered = zadania.filter(function(z){ return filter==='all'||(filter==='done'&&z.done)||(filter==='todo'&&!z.done); });
+  var doneC = zadania.filter(function(z){return z.done;}).length;
+  var zad = sel ? zadania.find(function(z){return z.id===sel;}) : null;
+
+  if (zad) {
+    var editing = editId===zad.id;
+    return React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+        React.createElement('button',{onClick:function(){setSel(null);setEditId(null);},style:{background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,fontFamily:'Outfit,sans-serif'}},'← Wróć'),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:function(){toggleDone(zad.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid '+(zad.done?'#22c55e':'var(--border)'),background:zad.done?'rgba(34,197,94,.1)':'transparent',color:zad.done?'#22c55e':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},zad.done?'✓ Wykonane':'Zaznacz wykonane'),
+          React.createElement('button',{onClick:function(){setEditId(editing?null:zad.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid '+(editing?'var(--pol)':'var(--border)'),background:editing?'rgba(239,68,68,.1)':'transparent',color:editing?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},editing?'✓ Gotowe':'✏️ Edytuj'),
+          React.createElement('button',{onClick:function(){deleteZad(zad.id);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid rgba(239,68,68,.3)',color:'#ef4444',background:'none',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},'🗑')
+        )
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px',marginBottom:12}},
+        editing ? React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+          React.createElement('input',{value:zad.typ,onChange:function(e){saveField(zad.id,'typ',e.target.value);},placeholder:'Typ zadania (np. Rozprawka)',style:{padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif'}}),
+          React.createElement('textarea',{value:zad.tresc,onChange:function(e){saveField(zad.id,'tresc',e.target.value);},placeholder:'Treść polecenia...',rows:4,style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'vertical',boxSizing:'border-box'}})
+        ) : React.createElement('div',null,
+          zad.typ && React.createElement('div',{style:{fontSize:11,color:'var(--pol)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},zad.typ),
+          React.createElement('p',{style:{fontSize:14,color:'var(--text)',lineHeight:1.6,margin:0}},zad.tresc)
+        )
+      ),
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}},'📝 Twoje notatki i odpowiedź'),
+        React.createElement(PolChat,{messages:zad.chat||[],color:'var(--pol)',
+          onSend:function(msg){onUpdate(function(prev){return prev.map(function(z){return z.id===zad.id?Object.assign({},z,{chat:(z.chat||[]).concat([msg])}):z;})});},
+          onDelete:function(msgId){onUpdate(function(prev){return prev.map(function(z){return z.id===zad.id?Object.assign({},z,{chat:(z.chat||[]).filter(function(m){return m.id!==msgId;})}):z;})});},
+          onClear:function(){onUpdate(function(prev){return prev.map(function(z){return z.id===zad.id?Object.assign({},z,{chat:[]}):z;})});}
+        })
+      )
+    );
+  }
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:12,flexWrap:'wrap'}},
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:9,padding:'6px 12px',fontSize:12}},
+        React.createElement('span',{style:{color:'#22c55e',fontWeight:700}},doneC),React.createElement('span',{style:{color:'var(--muted)'}},' / '+zadania.length+' wykonanych')
+      ),
+      React.createElement('div',{style:{display:'flex',gap:6}},
+        [{id:'all',l:'Wszystkie'},{id:'todo',l:'Do zrobienia'},{id:'done',l:'Wykonane'}].map(function(f){var a=filter===f.id; return React.createElement('button',{key:f.id,onClick:function(){setFilter(f.id);},style:{padding:'5px 10px',borderRadius:7,border:'1px solid '+(a?'var(--pol)':'var(--border)'),background:a?'rgba(239,68,68,.1)':'transparent',color:a?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},f.l);})
+      ),
+      React.createElement('button',{onClick:function(){setAdding(true);},style:{marginLeft:'auto',padding:'6px 14px',borderRadius:9,border:'1px solid var(--pol)',background:'rgba(239,68,68,.1)',color:'var(--pol)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'+  Nowe zadanie')
+    ),
+    adding && React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'14px',marginBottom:12}},
+      React.createElement('div',{style:{fontWeight:600,fontSize:13,marginBottom:10,color:'var(--pol)'}},'Nowe zadanie'),
+      React.createElement('input',{value:nz.typ,onChange:function(e){setNz(Object.assign({},nz,{typ:e.target.value}));},placeholder:'Typ (np. Rozprawka, Analiza)',style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif',marginBottom:7,boxSizing:'border-box'}}),
+      React.createElement('textarea',{value:nz.tresc,onChange:function(e){setNz(Object.assign({},nz,{tresc:e.target.value}));},placeholder:'Treść polecenia *',rows:3,style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',resize:'vertical',marginBottom:8,boxSizing:'border-box'}}),
+      React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('button',{onClick:addZad,style:{background:'var(--pol)',color:'#fff',border:'none',padding:'7px 18px',borderRadius:8,cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'Dodaj'),
+        React.createElement('button',{onClick:function(){setAdding(false);},style:{background:'none',border:'1px solid var(--border)',padding:'7px 14px',borderRadius:8,cursor:'pointer',fontSize:12,color:'var(--muted)',fontFamily:'Outfit,sans-serif'}},'Anuluj')
+      )
+    ),
+    React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
+      filtered.map(function(z){
+        return React.createElement('div',{key:z.id,onClick:function(){setSel(z.id);},style:{background:'var(--surface2)',border:'1px solid '+(z.done?'rgba(34,197,94,.3)':'var(--border)'),borderRadius:11,padding:'12px 14px',cursor:'pointer',display:'flex',alignItems:'flex-start',gap:10}},
+          React.createElement('div',{onClick:function(e){e.stopPropagation();toggleDone(z.id);},style:{width:20,height:20,borderRadius:5,border:'2px solid '+(z.done?'#22c55e':'var(--border)'),background:z.done?'#22c55e':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,marginTop:1,cursor:'pointer',transition:'all .15s'}},z.done?React.createElement('span',{style:{color:'#fff',fontSize:11}},'✓'):null),
+          React.createElement('div',{style:{flex:1,minWidth:0}},
+            z.typ && React.createElement('div',{style:{fontSize:10,color:'var(--pol)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:3}},z.typ),
+            React.createElement('p',{style:{fontSize:13,color:z.done?'var(--muted)':'var(--text)',margin:0,lineHeight:1.4,textDecoration:z.done?'line-through':'none'}},z.tresc.length>100?z.tresc.slice(0,100)+'...':z.tresc)
+          ),
+          (z.chat&&z.chat.length>0)&&React.createElement('span',{style:{fontSize:10,color:'var(--pol)',background:'rgba(239,68,68,.1)',padding:'2px 6px',borderRadius:6,flexShrink:0}},z.chat.length)
+        );
+      })
+    )
+  );
+};
+
+// ── ROZPRAWKA ──
+var PolRozprawka = function PolRozprawka(_ref_r) {
+  var rozprawka = _ref_r.rozprawka, onUpdate = _ref_r.onUpdate;
+  var _rt = useState('budowa'), rtab = _rt[0], setRtab = _rt[1];
+  var _ae = useState(null), editSlot = _ae[0], setEditSlot = _ae[1];
+  var _addS = useState(false), addingSz = _addS[0], setAddingSz = _addS[1];
+  var _ns = useState({typ:'argument',label:'',tresc:''}), ns = _ns[0], setNs = _ns[1];
+  var _addSl = useState(false), addingSl = _addSl[0], setAddingSl = _addSl[1];
+  var _nsl = useState(''), nsl = _nsl[0], setNsl = _nsl[1];
+
+  function updField(f,v){ onUpdate(function(prev){return Object.assign({},prev,_defineProperty({},f,v));}); }
+  function toggleCheck(id){ onUpdate(function(prev){return Object.assign({},prev,{checklista:(prev.checklista||[]).map(function(c){return c.id===id?Object.assign({},c,{done:!c.done}):c;})})}); }
+  function saveSzablon(id,f,v){ onUpdate(function(prev){return Object.assign({},prev,{szablony:(prev.szablony||[]).map(function(s){return s.id===id?Object.assign({},s,_defineProperty({},f,v)):s;})})}); }
+  function deleteSzablon(id){ onUpdate(function(prev){return Object.assign({},prev,{szablony:(prev.szablony||[]).filter(function(s){return s.id!==id;})})}); }
+  function addSzablon(){ if(!ns.tresc.trim()) return; onUpdate(function(prev){return Object.assign({},prev,{szablony:(prev.szablony||[]).concat([Object.assign({id:'sz_'+Date.now()},ns)])})}); setNs({typ:'argument',label:'',tresc:''}); setAddingSz(false); }
+  function addSlowo(){ if(!nsl.trim()) return; onUpdate(function(prev){return Object.assign({},prev,{slownictwo:(prev.slownictwo||[]).concat([nsl.trim()])})}); setNsl(''); setAddingSl(false); }
+  function deleteSlowo(i){ onUpdate(function(prev){return Object.assign({},prev,{slownictwo:(prev.slownictwo||[]).filter(function(_,idx){return idx!==i;})})}); }
+
+  var typColors = {wstep:'var(--pol)',argument:'#3b82f6',kontr:'#f97316',zakonczenie:'#22c55e'};
+  var doneChecks = (rozprawka.checklista||[]).filter(function(c){return c.done;}).length;
+  var rtabs = [{id:'budowa',l:'📐 Budowa'},{id:'slownictwo',l:'🔤 Słownictwo'},{id:'checklista',l:'✅ Checklista'},{id:'notatki',l:'📝 Notatki'}];
+
+  return React.createElement('div',null,
+    React.createElement('div',{style:{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}},
+      rtabs.map(function(t){var a=rtab===t.id; return React.createElement('button',{key:t.id,onClick:function(){setRtab(t.id);},style:{padding:'7px 14px',borderRadius:9,border:'1px solid '+(a?'var(--pol)':'var(--border)'),background:a?'rgba(239,68,68,.12)':'transparent',color:a?'var(--pol)':'var(--muted)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:a?600:400}},t.l);})
+    ),
+    rtab==='budowa' && React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',justifyContent:'flex-end',marginBottom:10}},
+        React.createElement('button',{onClick:function(){setAddingSz(true);},style:{padding:'5px 12px',borderRadius:8,border:'1px solid var(--pol)',background:'rgba(239,68,68,.1)',color:'var(--pol)',cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif',fontWeight:600}},'+  Nowy wzór')
+      ),
+      addingSz && React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'12px',marginBottom:12}},
+        React.createElement('div',{style:{display:'flex',gap:8,marginBottom:8}},
+          React.createElement('select',{value:ns.typ,onChange:function(e){setNs(Object.assign({},ns,{typ:e.target.value}));},style:{padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif'}},
+            [{v:'wstep',l:'Wstęp'},{v:'argument',l:'Argument'},{v:'kontr',l:'Kontrargument'},{v:'zakonczenie',l:'Zakończenie'}].map(function(o){return React.createElement('option',{key:o.v,value:o.v},o.l);})
+          ),
+          React.createElement('input',{value:ns.label,onChange:function(e){setNs(Object.assign({},ns,{label:e.target.value}));},placeholder:'Krótka nazwa...',style:{flex:1,padding:'6px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif'}})
+        ),
+        React.createElement('textarea',{value:ns.tresc,onChange:function(e){setNs(Object.assign({},ns,{tresc:e.target.value}));},placeholder:'Treść wzoru (użyj [TEMAT] itp.)...',rows:3,style:{width:'100%',padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif',resize:'vertical',marginBottom:7,boxSizing:'border-box'}}),
+        React.createElement('div',{style:{display:'flex',gap:8}},
+          React.createElement('button',{onClick:addSzablon,style:{background:'var(--pol)',color:'#fff',border:'none',padding:'6px 14px',borderRadius:8,cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'}},'Dodaj'),
+          React.createElement('button',{onClick:function(){setAddingSz(false);},style:{background:'none',border:'1px solid var(--border)',padding:'6px 10px',borderRadius:8,cursor:'pointer',fontSize:11,color:'var(--muted)',fontFamily:'Outfit,sans-serif'}},'Anuluj')
+        )
+      ),
+      ['wstep','argument','kontr','zakonczenie'].map(function(typ){
+        var items=(rozprawka.szablony||[]).filter(function(s){return s.typ===typ;});
+        var labels={wstep:'📌 WSTĘP',argument:'💡 ARGUMENTY',kontr:'⚖️ KONTRARGUMENTY',zakonczenie:'🎯 ZAKOŃCZENIE'};
+        var col=typColors[typ];
+        return React.createElement('div',{key:typ,style:{background:col+'11',border:'1px solid '+col+'33',borderRadius:12,padding:'12px',marginBottom:10}},
+          React.createElement('div',{style:{fontWeight:700,color:col,fontSize:12,marginBottom:8}},labels[typ]),
+          items.length===0 && React.createElement('div',{style:{color:'var(--muted)',fontSize:12,fontStyle:'italic'}},'Brak wzorów – dodaj nowy'),
+          items.map(function(s){
+            var isEdit=editSlot===s.id;
+            return React.createElement('div',{key:s.id,style:{background:'var(--surface)',borderRadius:8,padding:'10px',marginBottom:6}},
+              isEdit ? React.createElement('div',null,
+                React.createElement('input',{value:s.label,onChange:function(e){saveSzablon(s.id,'label',e.target.value);},placeholder:'Nazwa',style:{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:11,marginBottom:5,boxSizing:'border-box',fontFamily:'Outfit,sans-serif'}}),
+                React.createElement('textarea',{value:s.tresc,onChange:function(e){saveSzablon(s.id,'tresc',e.target.value);},rows:3,style:{width:'100%',padding:'5px 8px',borderRadius:6,border:'1px solid var(--border)',background:'var(--surface2)',color:'var(--text)',fontSize:12,resize:'vertical',boxSizing:'border-box',fontFamily:'Outfit,sans-serif'}}),
+                React.createElement('div',{style:{display:'flex',gap:6,marginTop:6}},
+                  React.createElement('button',{onClick:function(){setEditSlot(null);},style:{background:col,color:'#fff',border:'none',padding:'4px 12px',borderRadius:6,cursor:'pointer',fontSize:10,fontFamily:'Outfit,sans-serif'}},'✓ Zapisz'),
+                  React.createElement('button',{onClick:function(){deleteSzablon(s.id);setEditSlot(null);},style:{background:'none',border:'1px solid rgba(239,68,68,.3)',color:'#ef4444',padding:'4px 10px',borderRadius:6,cursor:'pointer',fontSize:10,fontFamily:'Outfit,sans-serif'}},'🗑 Usuń')
+                )
+              ) : React.createElement('div',null,
+                s.label && React.createElement('div',{style:{fontSize:10,color:col,fontWeight:600,marginBottom:4}},s.label),
+                React.createElement('p',{style:{fontSize:12,color:'var(--text)',margin:'0 0 6px',lineHeight:1.5,fontStyle:'italic'}},s.tresc),
+                React.createElement('div',{style:{display:'flex',gap:6}},
+                  React.createElement('button',{onClick:function(){try{navigator.clipboard.writeText(s.tresc);}catch(e){}},style:{fontSize:10,color:'var(--muted)',background:'none',border:'1px solid var(--border)',borderRadius:5,padding:'2px 8px',cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'📋 Kopiuj'),
+                  React.createElement('button',{onClick:function(){setEditSlot(s.id);},style:{fontSize:10,color:'var(--muted)',background:'none',border:'1px solid var(--border)',borderRadius:5,padding:'2px 8px',cursor:'pointer',fontFamily:'Outfit,sans-serif'}},'✏️ Edytuj')
+                )
+              )
+            );
+          })
+        );
+      })
+    ),
+    rtab==='slownictwo' && React.createElement('div',null,
+      React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:12}},'Kliknij wyrażenie aby skopiować. Możesz dodawać własne.'),
+      React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}},
+        (rozprawka.slownictwo||[]).map(function(s,i){
+          return React.createElement('div',{key:i,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'7px 10px',fontSize:12,color:'var(--text)',cursor:'pointer',display:'flex',alignItems:'center',gap:6},onClick:function(){try{navigator.clipboard.writeText(s);}catch(e){}}},
+            s,
+            React.createElement('button',{onClick:function(e){e.stopPropagation();deleteSlowo(i);},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:11,padding:0,lineHeight:1}},'✕')
+          );
+        })
+      ),
+      addingSl ? React.createElement('div',{style:{display:'flex',gap:8}},
+        React.createElement('input',{value:nsl,onChange:function(e){setNsl(e.target.value);},placeholder:'Nowe wyrażenie...',autoFocus:true,style:{flex:1,padding:'7px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',fontSize:12,fontFamily:'Outfit,sans-serif'}}),
+        React.createElement('button',{onClick:addSlowo,style:{background:'var(--pol)',color:'#fff',border:'none',padding:'7px 14px',borderRadius:8,cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'}},'Dodaj'),
+        React.createElement('button',{onClick:function(){setAddingSl(false);},style:{background:'none',border:'1px solid var(--border)',padding:'7px 10px',borderRadius:8,cursor:'pointer',color:'var(--muted)',fontFamily:'Outfit,sans-serif',fontSize:12}},'✕')
+      ) : React.createElement('button',{onClick:function(){setAddingSl(true);},style:{padding:'6px 14px',borderRadius:9,border:'1px solid var(--pol)',background:'rgba(239,68,68,.1)',color:'var(--pol)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600}},'+  Dodaj wyrażenie')
+    ),
+    rtab==='checklista' && React.createElement('div',null,
+      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:16}},
+        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:22,fontWeight:700,color:doneChecks===(rozprawka.checklista||[]).length?'#22c55e':'var(--pol)'}},doneChecks+'/'+(rozprawka.checklista||[]).length),
+        React.createElement('div',{style:{flex:1,height:6,background:'var(--surface3)',borderRadius:3}},
+          React.createElement('div',{style:{height:6,width:Math.round(doneChecks/((rozprawka.checklista||[]).length||1)*100)+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
+        )
+      ),
+      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:7}},
+        (rozprawka.checklista||[]).map(function(c){
+          return React.createElement('div',{key:c.id,onClick:function(){toggleCheck(c.id);},style:{display:'flex',gap:10,alignItems:'center',padding:'10px 12px',borderRadius:10,cursor:'pointer',background:c.done?'rgba(34,197,94,.08)':'var(--surface2)',border:'1px solid '+(c.done?'rgba(34,197,94,.3)':'var(--border)'),transition:'all .15s'}},
+            React.createElement('div',{style:{width:20,height:20,borderRadius:5,border:'2px solid '+(c.done?'#22c55e':'var(--border)'),background:c.done?'#22c55e':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s'}},c.done?React.createElement('span',{style:{color:'#fff',fontSize:11}},'✓'):null),
+            React.createElement('span',{style:{fontSize:13,color:c.done?'#22c55e':'var(--text)',textDecoration:c.done?'line-through':'none'}},c.txt)
+          );
+        })
+      )
+    ),
+    rtab==='notatki' && React.createElement('div',null,
+      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'14px'}},
+        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}},'📝 Notatki do rozprawek (zdjęcia, szkice, myśli)'),
+        React.createElement(PolChat,{messages:rozprawka.chat||[],color:'var(--pol)',
+          onSend:function(msg){onUpdate(function(prev){return Object.assign({},prev,{chat:(prev.chat||[]).concat([msg])});});},
+          onDelete:function(msgId){onUpdate(function(prev){return Object.assign({},prev,{chat:(prev.chat||[]).filter(function(m){return m.id!==msgId;})});});},
+          onClear:function(){onUpdate(function(prev){return Object.assign({},prev,{chat:[]});});}
+        })
+      )
+    )
+  );
+};
+
+
+// ─── MATH WARMUP ──────────────────────────────────────────────────────────────
+
+var MathWarmup = function MathWarmup() {
+  var STORAGE_KEY = 'mathWarmupRecords';
+  var CATEGORIES = [
+    {id:'add', label:'Dodawanie', sym:'+'},
+    {id:'sub', label:'Odejmowanie', sym:'-'},
+    {id:'mul', label:'Mnożenie', sym:'×'},
+    {id:'div', label:'Dzielenie', sym:'÷'},
+  ];
+  var LEVELS = [
+    {val:5,label:'do 5'},
+    {val:10,label:'do 10'},
+    {val:20,label:'do 20'},
+    {val:50,label:'do 50'},
+    {val:100,label:'do 100'},
+  ];
+
+  var _s0 = useState('menu'), phase = _s0[0], setPhase = _s0[1];
+  var _s1 = useState('add'), cat = _s1[0], setCat = _s1[1];
+  var _s2 = useState(10), maxN = _s2[0], setMaxN = _s2[1];
+  var _s3 = useState(10), qCount = _s3[0], setQCount = _s3[1];
+  var _s4 = useState([]), questions = _s4[0], setQuestions = _s4[1];
+  var _s5 = useState(0), qIdx = _s5[0], setQIdx = _s5[1];
+  var _s6 = useState(''), answer = _s6[0], setAnswer = _s6[1];
+  var _s7 = useState([]), results = _s7[0], setResults = _s7[1];
+  var _s8 = useState(0), startTime = _s8[0], setStartTime = _s8[1];
+  var _s9 = useState(null), feedback = _s9[0], setFeedback = _s9[1];
+  var _s10 = useState(null), elapsed = _s10[0], setElapsed = _s10[1];
+  var inputRef = useRef(null);
+
+  function loadRecords() {
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e) { return {}; }
+  }
+  function saveRecord(catId, level, score, total, time) {
+    var key = catId + '_' + level;
+    var recs = loadRecords();
+    var prev = recs[key];
+    var pct = Math.round(score/total*100);
+    if (!prev || pct > prev.pct || (pct === prev.pct && time < prev.time)) {
+      recs[key] = {pct, score, total, time: Math.round(time), date: new Date().toLocaleDateString('pl-PL')};
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(recs));
+    }
+  }
+  function getRecord(catId, level) {
+    var key = catId + '_' + level;
+    return loadRecords()[key] || null;
+  }
+
+  function genQuestion(catId, max) {
+    var a, b, q, ans;
+    if (catId === 'add') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*max)+1;
+      q = a + ' + ' + b; ans = a+b;
+    } else if (catId === 'sub') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*a)+1;
+      q = a + ' - ' + b; ans = a-b;
+    } else if (catId === 'mul') {
+      a = Math.floor(Math.random()*max)+1;
+      b = Math.floor(Math.random()*10)+1;
+      q = a + ' × ' + b; ans = a*b;
+    } else {
+      b = Math.floor(Math.random()*9)+2;
+      ans = Math.floor(Math.random()*Math.floor(max/b))+1;
+      a = ans*b;
+      q = a + ' ÷ ' + b;
+    }
+    return {q, ans};
+  }
+
+  function startGame() {
+    var qs = [];
+    for (var i=0; i<qCount; i++) qs.push(genQuestion(cat, maxN));
+    setQuestions(qs); setQIdx(0); setResults([]); setAnswer(''); setFeedback(null);
+    setStartTime(Date.now()); setPhase('game');
+    setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },100);
+  }
+
+  function submitAnswer() {
+    var num = parseInt(answer, 10);
+    var q = questions[qIdx];
+    var correct = num === q.ans;
+    var newResults = results.concat([{q: q.q, ans: q.ans, given: num, ok: correct}]);
+    setAnswer('');
+    if (!correct) {
+      // Przy błędzie pokaż feedback przez 900ms (żeby zobaczyć poprawną odpowiedź)
+      setFeedback('err_' + q.ans);
+      setResults(newResults);
+      setTimeout(function() {
+        setFeedback(null);
+        if (qIdx+1 >= questions.length) {
+          var t = (Date.now()-startTime)/1000;
+          setElapsed(t);
+          var score = newResults.filter(function(r){return r.ok;}).length;
+          saveRecord(cat, maxN, score, questions.length, t);
+          setPhase('result');
+        } else {
+          setQIdx(qIdx+1);
+          setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },50);
+        }
+      }, 900);
+    } else {
+      // Przy poprawnej — natychmiastowe przejście, tylko mignięcie zielonego
+      setFeedback('ok');
+      setResults(newResults);
+      setTimeout(function(){ setFeedback(null); }, 200);
+      if (qIdx+1 >= questions.length) {
+        var t = (Date.now()-startTime)/1000;
+        setElapsed(t);
+        var score2 = newResults.filter(function(r){return r.ok;}).length;
+        saveRecord(cat, maxN, score2, questions.length, t);
+        setTimeout(function(){ setPhase('result'); }, 200);
+      } else {
+        setQIdx(qIdx+1);
+        setTimeout(function(){ if(inputRef.current) inputRef.current.focus(); },30);
+      }
+    }
+  }
+
+  function handleKey(e) {
+    if (e.key === 'Enter' && answer !== '') submitAnswer();
+  }
+
+  var catInfo = CATEGORIES.find(function(c){return c.id===cat;});
+  var rec = getRecord(cat, maxN);
+
+  if (phase === 'menu') return React.createElement('div', {style:{padding:'8px 0'}},
+    React.createElement('div', {style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:20}},
+      CATEGORIES.map(function(c) {
+        return React.createElement('button', {
+          key:c.id,
+          onClick:function(){setCat(c.id);},
+          style:{
+            padding:'8px 16px',borderRadius:20,border:'1px solid',cursor:'pointer',
+            fontFamily:'Outfit,sans-serif',fontSize:14,fontWeight:500,transition:'all .15s',
+            background: cat===c.id ? 'var(--math)' : 'var(--surface2)',
+            color: cat===c.id ? '#fff' : 'var(--text)',
+            borderColor: cat===c.id ? 'var(--math)' : 'var(--border)',
+          }
+        }, c.label);
+      })
+    ),
+    React.createElement('div', {style:{marginBottom:20}},
+      React.createElement('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
+        React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, cat==='tab'?'Zakres tabliczki mnożenia:':'Zakres liczb:'),
+        React.createElement('span', {style:{color:'var(--math)',fontWeight:600,fontSize:14}}, cat==='tab'?'do '+maxN+' × 9':('do '+maxN))
+      ),
+      React.createElement('div', {style:{display:'flex',gap:8,flexWrap:'wrap'}},
+        LEVELS.map(function(l){
+          var r = getRecord(cat, l.val);
+          return React.createElement('button', {
+            key:l.val, onClick:function(){setMaxN(l.val);},
+            style:{
+              padding:'6px 14px',borderRadius:12,border:'1px solid',cursor:'pointer',
+              fontFamily:'Outfit,sans-serif',fontSize:13,transition:'all .15s',position:'relative',
+              background: maxN===l.val ? 'var(--math-dim)' : 'var(--surface2)',
+              color: maxN===l.val ? 'var(--math)' : 'var(--muted)',
+              borderColor: maxN===l.val ? 'var(--math)' : 'var(--border)',
+            }
+          },
+            l.label,
+            r ? React.createElement('span',{style:{display:'block',fontSize:10,color:'#22c55e',marginTop:1}},'Rekord: '+r.pct+'%') : null
+          );
+        })
+      )
+    ),
+    React.createElement('div', {style:{marginBottom:24}},
+      React.createElement('div', {style:{color:'var(--muted)',fontSize:13,marginBottom:8}}, 'Liczba pytań:'),
+      React.createElement('div', {style:{display:'flex',alignItems:'center',gap:12}},
+        React.createElement('input', {
+          type:'range', min:5, max:30, step:5, value:qCount,
+          onChange:function(e){setQCount(Number(e.target.value));},
+          style:{flex:1}
+        }),
+        React.createElement('span', {style:{color:'var(--math)',fontWeight:600,minWidth:32}}, qCount)
+      )
+    ),
+    rec && React.createElement('div', {style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,padding:'10px 16px',marginBottom:20,display:'flex',gap:20,flexWrap:'wrap'}},
+      React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, 'Rekord w tej kategorii:'),
+      React.createElement('span', {style:{color:'#22c55e',fontWeight:600,fontSize:13}}, rec.pct+'% ('+rec.score+'/'+rec.total+')'),
+      React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, rec.time+'s · '+rec.date)
+    ),
+    React.createElement('button', {
+      onClick:startGame,
+      style:{
+        background:'var(--math)',color:'#fff',border:'none',padding:'12px 32px',
+        borderRadius:12,fontSize:16,fontWeight:600,cursor:'pointer',width:'100%',
+        fontFamily:'Outfit,sans-serif',letterSpacing:'.5px'
+      }
+    }, 'START')
+  );
+
+  if (phase === 'game') {
+    var q = questions[qIdx];
+    var prog = Math.round((qIdx/questions.length)*100);
+    var fbColor = feedback === 'ok' ? '#22c55e' : feedback ? '#ef4444' : 'transparent';
+    return React.createElement('div', {style:{padding:'8px 0'}},
+      React.createElement('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
+        React.createElement('span', {style:{color:'var(--muted)',fontSize:13}}, (qIdx+1)+' / '+questions.length),
+        React.createElement('span', {style:{color:'var(--math)',fontSize:13,fontWeight:600}}, catInfo.label+' · do '+maxN),
+        React.createElement('button', {onClick:function(){setPhase('menu');},style:{background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:13}}, '✕ Przerwij')
+      ),
+      React.createElement('div', {style:{height:4,background:'var(--surface3)',borderRadius:2,marginBottom:28}},
+        React.createElement('div', {style:{height:4,width:prog+'%',background:'var(--math)',borderRadius:2,transition:'width .3s'}})
+      ),
+      React.createElement('div', {
+        style:{
+          background:'var(--surface2)',border:'2px solid '+fbColor,borderRadius:16,
+          padding:'32px 24px',textAlign:'center',marginBottom:24,transition:'border-color .2s'
+        }
+      },
+        React.createElement('div', {style:{fontSize:48,fontWeight:700,fontFamily:'Syne,sans-serif',color:'var(--text)',letterSpacing:2}}, q.q+' = ?'),
+        feedback && feedback!=='ok' && React.createElement('div', {style:{marginTop:12,color:'#ef4444',fontSize:14}}, 'Błąd! Odpowiedź: '+q.ans),
+        feedback === 'ok' && React.createElement('div', {style:{marginTop:12,color:'#22c55e',fontSize:14}}, 'Dobrze!')
+      ),
+      React.createElement('div', {style:{display:'flex',gap:10}},
+        React.createElement('input', {
+          ref:inputRef, type:'number', value:answer,
+          onChange:function(e){setAnswer(e.target.value);},
+          onKeyDown:handleKey,
+          placeholder:'Twoja odpowiedź...',
+          style:{flex:1,fontSize:20,padding:'12px 16px',borderRadius:10,textAlign:'center',
+            border:'1px solid var(--border)',background:'var(--surface)',color:'var(--text)',
+            fontFamily:'Outfit,sans-serif'}
+        }),
+        React.createElement('button', {
+          onClick:submitAnswer, disabled:answer==='',
+          style:{
+            background: answer===''?'var(--surface3)':'var(--math)',
+            color: answer===''?'var(--muted)':'#fff',
+            border:'none',padding:'0 24px',borderRadius:10,fontSize:16,fontWeight:600,
+            cursor:answer===''?'not-allowed':'pointer',fontFamily:'Outfit,sans-serif'
+          }
+        }, 'OK')
+      )
+    );
+  }
+
+  if (phase === 'result') {
+    var score2 = results.filter(function(r){return r.ok;}).length;
+    var pct2 = Math.round(score2/results.length*100);
+    var t2 = elapsed.toFixed(1);
+    var rec2 = getRecord(cat, maxN);
+    var isRecord = rec2 && rec2.pct === pct2 && Math.round(rec2.time) === Math.round(elapsed);
+    return React.createElement('div', {style:{padding:'8px 0'}},
+      React.createElement('div', {style:{textAlign:'center',marginBottom:24}},
+        React.createElement('div', {style:{fontSize:56,fontWeight:800,fontFamily:'Syne,sans-serif',color:pct2>=80?'#22c55e':pct2>=50?'#f59e0b':'#ef4444'}}, pct2+'%'),
+        React.createElement('div', {style:{color:'var(--muted)',fontSize:14,marginTop:4}}, score2+' / '+results.length+' poprawnych · '+t2+'s'),
+        isRecord && React.createElement('div', {style:{marginTop:8,color:'#f59e0b',fontWeight:600,fontSize:14}}, 'Nowy rekord!')
+      ),
+      React.createElement('div', {style:{display:'flex',gap:10,marginBottom:20}},
+        React.createElement('button', {
+          onClick:startGame,
+          style:{flex:1,background:'var(--math)',color:'#fff',border:'none',padding:'11px',borderRadius:10,fontSize:14,fontWeight:600,cursor:'pointer',fontFamily:'Outfit,sans-serif'}
+        }, 'Jeszcze raz'),
+        React.createElement('button', {
+          onClick:function(){setPhase('menu');},
+          style:{flex:1,background:'var(--surface2)',color:'var(--text)',border:'1px solid var(--border)',padding:'11px',borderRadius:10,fontSize:14,cursor:'pointer',fontFamily:'Outfit,sans-serif'}
+        }, 'Zmień ustawienia')
+      ),
+      React.createElement('div', {style:{borderTop:'1px solid var(--border)',paddingTop:16}},
+        React.createElement('div', {style:{color:'var(--muted)',fontSize:12,marginBottom:10}}, 'Szczegóły:'),
+        results.map(function(r, i) {
+          return React.createElement('div', {
+            key:i,
+            style:{display:'flex',justifyContent:'space-between',padding:'6px 10px',borderRadius:8,marginBottom:4,
+              background:r.ok?'rgba(34,197,94,.08)':'rgba(239,68,68,.08)',
+              border:'1px solid '+(r.ok?'rgba(34,197,94,.2)':'rgba(239,68,68,.2)')}
+          },
+            React.createElement('span', {style:{fontSize:14,color:'var(--text)'}}, r.q+' = '+r.ans),
+            React.createElement('span', {style:{fontSize:13,fontWeight:600,color:r.ok?'#22c55e':'#ef4444'}}, r.ok ? 'OK' : 'Błąd ('+r.given+')')
+          );
+        })
+      )
+    );
+  }
+
+  return null;
+};
+
+// ─── MATH VIEW (z zakładkami) ─────────────────────────────────────────────────
+
 // ─── POLISH VIEW ──────────────────────────────────────────────────────────────
 
 var POL_STORAGE_KEY = 'polishData_v1';
@@ -9569,419 +10531,6 @@ var ROZPRAWKA_DATA = {
     { id:'ch10', txt:'Tytuły lektur kursywą lub w cudzysłowie', done:false },
   ]
 };
-
-var PolishView = function PolishView(_ref_pol) {
-  var subject = _ref_pol.subject, onUpdate = _ref_pol.onUpdate;
-
-  var _pt = useState('dzialy'), polTab = _pt[0], setPolTab = _pt[1];
-  var _pd = useState(function(){ return polLoad(); }), polData = _pd[0], setPolData = _pd[1];
-
-  function savePolData(d) { setPolData(d); polSave(d); }
-
-  var lektury = polData.lektury || INITIAL_LEKTURY;
-  var motywy = polData.motywy || INITIAL_MOTYWY;
-  var zadania = polData.zadania || INITIAL_ZADANIA;
-  var rozprawka = polData.rozprawka || ROZPRAWKA_DATA;
-
-  function updLektury(fn) { var n=fn(lektury); savePolData(Object.assign({},polData,{lektury:n})); }
-  function updMotywy(fn) { var n=fn(motywy); savePolData(Object.assign({},polData,{motywy:n})); }
-  function updZadania(fn) { var n=fn(zadania); savePolData(Object.assign({},polData,{zadania:n})); }
-  function updRozprawka(fn) { var n=fn(rozprawka); savePolData(Object.assign({},polData,{rozprawka:n})); }
-
-  var TABS = [
-    {id:'dzialy',label:'Działy',emoji:'📚'},
-    {id:'lektury',label:'Lektury',emoji:'📖'},
-    {id:'motywy',label:'Motywy',emoji:'🎭'},
-    {id:'zadania',label:'Zadania',emoji:'✏️'},
-    {id:'rozprawka',label:'Rozprawka',emoji:'📝'},
-  ];
-
-  return React.createElement('div',{className:'fade-in'},
-    // Tabs
-    React.createElement('div',{style:{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)',overflowX:'auto'}},
-      TABS.map(function(t){
-        var active=polTab===t.id;
-        return React.createElement('button',{key:t.id,onClick:function(){setPolTab(t.id);},style:{
-          padding:'10px 14px',border:'none',background:'none',cursor:'pointer',whiteSpace:'nowrap',
-          fontFamily:'Outfit,sans-serif',fontSize:13,fontWeight:active?600:400,
-          color:active?'var(--pol)':'var(--muted)',
-          borderBottom:active?'2px solid var(--pol)':'2px solid transparent',
-          transition:'all .15s',marginBottom:-1
-        }},t.emoji+' '+t.label);
-      })
-    ),
-
-    // ── DZIAŁY ──
-    polTab==='dzialy' && React.createElement(SubjectView,{subject:subject,onUpdate:onUpdate,searchQuery:''}),
-
-    // ── LEKTURY ──
-    polTab==='lektury' && React.createElement(PolLektury,{lektury:lektury,onUpdate:updLektury}),
-
-    // ── MOTYWY ──
-    polTab==='motywy' && React.createElement(PolMotywy,{motywy:motywy,onUpdate:updMotywy}),
-
-    // ── ZADANIA ──
-    polTab==='zadania' && React.createElement(PolZadania,{zadania:zadania,onUpdate:updZadania}),
-
-    // ── ROZPRAWKA ──
-    polTab==='rozprawka' && React.createElement(PolRozprawka,{rozprawka:rozprawka,onUpdate:updRozprawka})
-  );
-};
-
-// ── LEKTURY ──────────────────────────────────────────────────────────────────
-var PolLektury = function PolLektury(_ref_l) {
-  var lektury = _ref_l.lektury, onUpdate = _ref_l.onUpdate;
-  var _ls = useState(null), selected = _ls[0], setSelected = _ls[1];
-  var _lf = useState(''), filter = _lf[0], setFilter = _lf[1];
-  var _lep = useState('all'), epoka = _lep[0], setEpoka = _lep[1];
-
-  var epoki = ['all'].concat(Array.from(new Set(lektury.map(function(l){return l.epoka;}))));
-  var filtered = lektury.filter(function(l){
-    var matchEp = epoka==='all' || l.epoka===epoka;
-    var matchF = !filter || l.tytul.toLowerCase().includes(filter.toLowerCase()) || l.autor.toLowerCase().includes(filter.toLowerCase());
-    return matchEp && matchF;
-  });
-  var doneCount = lektury.filter(function(l){return l.done;}).length;
-
-  function toggleDone(id) {
-    onUpdate(function(prev){ return prev.map(function(l){ return l.id===id ? Object.assign({},l,{done:!l.done}) : l; }); });
-  }
-
-  if (selected) {
-    var lek = lektury.find(function(l){return l.id===selected;});
-    if (!lek) { setSelected(null); return null; }
-    return React.createElement('div',null,
-      React.createElement('button',{onClick:function(){setSelected(null);},style:{
-        background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,
-        fontFamily:'Outfit,sans-serif',marginBottom:16,display:'flex',alignItems:'center',gap:6
-      }},'← Wróć do listy'),
-      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'20px'}},
-        React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16,flexWrap:'wrap',gap:8}},
-          React.createElement('div',null,
-            React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:700,color:'var(--pol)',marginBottom:4}},lek.tytul),
-            React.createElement('div',{style:{fontSize:13,color:'var(--muted)'}},lek.autor+' · '+lek.epoka+' · '+lek.gatunek)
-          ),
-          React.createElement('button',{onClick:function(){toggleDone(lek.id);},style:{
-            padding:'7px 16px',borderRadius:10,border:'1px solid '+(lek.done?'#22c55e':'var(--border)'),
-            background:lek.done?'rgba(34,197,94,.15)':'var(--surface)',
-            color:lek.done?'#22c55e':'var(--muted)',cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:600
-          }},lek.done?'✓ Opanowana':'Zaznacz jako opanowaną')
-        ),
-        React.createElement('div',{style:{marginBottom:14}},
-          React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},'Opis / Fabuła'),
-          React.createElement('p',{style:{fontSize:14,color:'var(--text)',lineHeight:1.6,margin:0}},lek.opis)
-        ),
-        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:14}},
-          React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'12px'}},
-            React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},'👥 Bohaterowie'),
-            React.createElement('p',{style:{fontSize:13,color:'var(--text)',margin:0,lineHeight:1.5}},lek.bohaterowie)
-          ),
-          React.createElement('div',{style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'12px'}},
-            React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},'🎭 Motywy'),
-            React.createElement('p',{style:{fontSize:13,color:'var(--text)',margin:0,lineHeight:1.5}},lek.motywy)
-          )
-        ),
-        React.createElement('div',{style:{background:'rgba(139,92,246,.08)',border:'1px solid rgba(139,92,246,.25)',borderRadius:10,padding:'12px'}},
-          React.createElement('div',{style:{fontSize:11,color:'#8b5cf6',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},'💡 Teza / Interpretacja'),
-          React.createElement('p',{style:{fontSize:13,color:'var(--text)',margin:0,lineHeight:1.5,fontStyle:'italic'}},lek.teza)
-        )
-      )
-    );
-  }
-
-  return React.createElement('div',null,
-    // Stats
-    React.createElement('div',{style:{display:'flex',gap:8,marginBottom:16,alignItems:'center',flexWrap:'wrap'}},
-      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'8px 14px',fontSize:13}},
-        React.createElement('span',{style:{color:'#22c55e',fontWeight:700}},doneCount),
-        React.createElement('span',{style:{color:'var(--muted)'}},' / '+lektury.length+' opanowanych')
-      ),
-      React.createElement('div',{style:{flex:1,height:6,background:'var(--surface3)',borderRadius:3,minWidth:80}},
-        React.createElement('div',{style:{height:6,width:Math.round(doneCount/lektury.length*100)+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
-      )
-    ),
-    // Filtr epok
-    React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap',marginBottom:12}},
-      epoki.map(function(ep){
-        var a=epoka===ep;
-        return React.createElement('button',{key:ep,onClick:function(){setEpoka(ep);},style:{
-          padding:'4px 10px',borderRadius:8,border:'1px solid '+(a?'var(--pol)':'var(--border)'),
-          background:a?'rgba(239,68,68,.12)':'transparent',color:a?'var(--pol)':'var(--muted)',
-          cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif',fontWeight:a?600:400
-        }},ep==='all'?'Wszystkie':ep);
-      })
-    ),
-    // Wyszukiwarka
-    React.createElement('input',{type:'text',placeholder:'Szukaj lektury lub autora...',value:filter,
-      onChange:function(e){setFilter(e.target.value);},
-      style:{width:'100%',padding:'9px 12px',borderRadius:9,border:'1px solid var(--border)',
-        background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',
-        marginBottom:14,boxSizing:'border-box'}
-    }),
-    // Lista
-    React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-      filtered.map(function(lek){
-        return React.createElement('div',{key:lek.id,style:{
-          background:'var(--surface2)',border:'1px solid '+(lek.done?'rgba(34,197,94,.3)':'var(--border)'),
-          borderRadius:12,padding:'12px 14px',cursor:'pointer',transition:'all .15s',
-          display:'flex',alignItems:'center',gap:12
-        },onClick:function(){setSelected(lek.id);}},
-          React.createElement('div',{onClick:function(e){e.stopPropagation();toggleDone(lek.id);},style:{
-            width:22,height:22,borderRadius:6,border:'2px solid '+(lek.done?'#22c55e':'var(--border)'),
-            background:lek.done?'#22c55e':'transparent',display:'flex',alignItems:'center',
-            justifyContent:'center',flexShrink:0,cursor:'pointer',transition:'all .15s'
-          }},lek.done?React.createElement('span',{style:{color:'#fff',fontSize:13}},'✓'):null),
-          React.createElement('div',{style:{flex:1,minWidth:0}},
-            React.createElement('div',{style:{fontWeight:600,fontSize:14,color:lek.done?'#22c55e':'var(--text)',marginBottom:2}},lek.tytul),
-            React.createElement('div',{style:{fontSize:12,color:'var(--muted)'}},lek.autor+' · '+lek.epoka)
-          ),
-          React.createElement('span',{style:{fontSize:11,color:'var(--muted)',opacity:.6}},'>>')
-        );
-      })
-    )
-  );
-};
-
-// ── MOTYWY ──────────────────────────────────────────────────────────────────
-var PolMotywy = function PolMotywy(_ref_m) {
-  var motywy = _ref_m.motywy, onUpdate = _ref_m.onUpdate;
-  var _ms = useState(null), selected = _ms[0], setSelected = _ms[1];
-
-  if (selected) {
-    var mot = motywy.find(function(m){return m.id===selected;});
-    if (!mot) { setSelected(null); return null; }
-    return React.createElement('div',null,
-      React.createElement('button',{onClick:function(){setSelected(null);},style:{
-        background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,
-        fontFamily:'Outfit,sans-serif',marginBottom:16
-      }},'← Wróć do listy'),
-      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:14,padding:'20px'}},
-        React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:12}},
-          React.createElement('div',{style:{width:14,height:14,borderRadius:'50%',background:mot.kolor,flexShrink:0}}),
-          React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:20,fontWeight:700}},mot.nazwa)
-        ),
-        React.createElement('p',{style:{fontSize:14,color:'var(--muted)',lineHeight:1.6,marginBottom:16}},mot.opis),
-        React.createElement('div',{style:{fontSize:11,color:'var(--muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:10}},'Realizacje w lekturach:'),
-        mot.przyklady.map(function(p,i){
-          return React.createElement('div',{key:i,style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:10,padding:'12px',marginBottom:8}},
-            React.createElement('div',{style:{fontWeight:600,fontSize:13,color:'var(--pol)',marginBottom:4}},p.dzielo,' ',React.createElement('span',{style:{color:'var(--muted)',fontWeight:400}},'– '+p.autor)),
-            React.createElement('p',{style:{fontSize:13,color:'var(--text)',margin:0,lineHeight:1.5}},p.omowienie)
-          );
-        })
-      )
-    );
-  }
-
-  return React.createElement('div',null,
-    React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:16}},'Kliknij motyw aby zobaczyć jego realizacje w lekturach maturalnych.'),
-    React.createElement('div',{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:10}},
-      motywy.map(function(mot){
-        return React.createElement('div',{key:mot.id,onClick:function(){setSelected(mot.id);},style:{
-          background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:12,
-          padding:'14px',cursor:'pointer',transition:'all .15s'
-        }},
-          React.createElement('div',{style:{width:10,height:10,borderRadius:'50%',background:mot.kolor,marginBottom:8}}),
-          React.createElement('div',{style:{fontWeight:600,fontSize:14,color:'var(--text)',marginBottom:4}},mot.nazwa),
-          React.createElement('div',{style:{fontSize:11,color:'var(--muted)'}},mot.przyklady.length+' lektur'),
-          React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:4,opacity:.7,lineHeight:1.4}},mot.opis.slice(0,60)+'...')
-        );
-      })
-    )
-  );
-};
-
-// ── ZADANIA ──────────────────────────────────────────────────────────────────
-var PolZadania = function PolZadania(_ref_z) {
-  var zadania = _ref_z.zadania, onUpdate = _ref_z.onUpdate;
-  var _ze = useState(null), editing = _ze[0], setEditing = _ze[1];
-  var _zt = useState(''), text = _zt[0], setText = _zt[1];
-  var _zf = useState('all'), filter = _zf[0], setFilter = _zf[1];
-
-  var filtered = filter==='all' ? zadania : filter==='done' ? zadania.filter(function(z){return z.done;}) : zadania.filter(function(z){return !z.done;});
-  var doneC = zadania.filter(function(z){return z.done;}).length;
-
-  function toggleDone(id) { onUpdate(function(prev){return prev.map(function(z){return z.id===id?Object.assign({},z,{done:!z.done}):z;})}); }
-  function saveNote(id,txt) { onUpdate(function(prev){return prev.map(function(z){return z.id===id?Object.assign({},z,{notatki:txt}):z;})}); setEditing(null); }
-
-  return React.createElement('div',null,
-    // Stats
-    React.createElement('div',{style:{display:'flex',gap:8,alignItems:'center',marginBottom:16,flexWrap:'wrap'}},
-      React.createElement('div',{style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'8px 14px',fontSize:13}},
-        React.createElement('span',{style:{color:'#22c55e',fontWeight:700}},doneC),
-        React.createElement('span',{style:{color:'var(--muted)'}},' / '+zadania.length+' wykonanych')
-      ),
-      React.createElement('div',{style:{display:'flex',gap:6}},
-        [{id:'all',l:'Wszystkie'},{id:'todo',l:'Do zrobienia'},{id:'done',l:'Wykonane'}].map(function(f){
-          var a=filter===f.id;
-          return React.createElement('button',{key:f.id,onClick:function(){setFilter(f.id);},style:{
-            padding:'5px 10px',borderRadius:8,border:'1px solid '+(a?'var(--pol)':'var(--border)'),
-            background:a?'rgba(239,68,68,.12)':'transparent',color:a?'var(--pol)':'var(--muted)',
-            cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
-          }},f.l);
-        })
-      )
-    ),
-    // Lista zadań
-    React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:10}},
-      filtered.map(function(z){
-        var isEditing = editing===z.id;
-        return React.createElement('div',{key:z.id,style:{
-          background:'var(--surface2)',border:'1px solid '+(z.done?'rgba(34,197,94,.3)':'var(--border)'),
-          borderRadius:12,padding:'14px',opacity:z.done?.8:1,transition:'all .15s'
-        }},
-          React.createElement('div',{style:{display:'flex',gap:10,alignItems:'flex-start'}},
-            React.createElement('div',{onClick:function(){toggleDone(z.id);},style:{
-              width:22,height:22,borderRadius:6,border:'2px solid '+(z.done?'#22c55e':'var(--border)'),
-              background:z.done?'#22c55e':'transparent',display:'flex',alignItems:'center',
-              justifyContent:'center',flexShrink:0,cursor:'pointer',marginTop:1,transition:'all .15s'
-            }},z.done?React.createElement('span',{style:{color:'#fff',fontSize:12}},'✓'):null),
-            React.createElement('div',{style:{flex:1}},
-              React.createElement('div',{style:{fontSize:11,color:'var(--pol)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:4}},z.typ),
-              React.createElement('p',{style:{fontSize:13,color:z.done?'var(--muted)':'var(--text)',margin:'0 0 8px',lineHeight:1.5,textDecoration:z.done?'line-through':'none'}},z.tresc),
-              isEditing ? React.createElement('div',null,
-                React.createElement('textarea',{value:text,onChange:function(e){setText(e.target.value);},
-                  placeholder:'Twoje notatki do tego zadania...',
-                  style:{width:'100%',minHeight:80,padding:'8px',borderRadius:8,border:'1px solid var(--border)',
-                    background:'var(--surface)',color:'var(--text)',fontSize:13,fontFamily:'Outfit,sans-serif',
-                    resize:'vertical',boxSizing:'border-box'}
-                }),
-                React.createElement('div',{style:{display:'flex',gap:8,marginTop:8}},
-                  React.createElement('button',{onClick:function(){saveNote(z.id,text);},style:{
-                    background:'var(--pol)',color:'#fff',border:'none',padding:'6px 14px',borderRadius:8,
-                    cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
-                  }},'Zapisz'),
-                  React.createElement('button',{onClick:function(){setEditing(null);},style:{
-                    background:'none',border:'1px solid var(--border)',padding:'6px 14px',borderRadius:8,
-                    cursor:'pointer',fontSize:12,color:'var(--muted)',fontFamily:'Outfit,sans-serif'
-                  }},'Anuluj')
-                )
-              ) : React.createElement('div',null,
-                z.notatki && React.createElement('div',{style:{background:'var(--surface)',borderRadius:8,padding:'8px',fontSize:12,color:'var(--muted)',marginBottom:6,lineHeight:1.5}},z.notatki),
-                React.createElement('button',{onClick:function(){setEditing(z.id);setText(z.notatki||'');},style:{
-                  background:'none',border:'none',color:'var(--muted)',cursor:'pointer',fontSize:11,
-                  fontFamily:'Outfit,sans-serif',padding:0
-                }},z.notatki?'✏️ Edytuj notatki':'+ Dodaj notatki')
-              )
-            )
-          )
-        );
-      })
-    )
-  );
-};
-
-// ── ROZPRAWKA ────────────────────────────────────────────────────────────────
-var PolRozprawka = function PolRozprawka(_ref_r) {
-  var rozprawka = _ref_r.rozprawka, onUpdate = _ref_r.onUpdate;
-  var _rrt = useState('budowa'), rtab = _rrt[0], setRtab = _rrt[1];
-
-  function toggleChecklist(id) {
-    onUpdate(function(prev){
-      var nc = prev.checklisty.map(function(c){return c.id===id?Object.assign({},c,{done:!c.done}):c;});
-      return Object.assign({},prev,{checklisty:nc});
-    });
-  }
-
-  var rtabs = [{id:'budowa',l:'📐 Budowa'},{id:'wzory',l:'📋 Wzory zdań'},{id:'slownictwo',l:'🔤 Słownictwo'},{id:'checklista',l:'✅ Checklista'}];
-  var doneChecks = (rozprawka.checklisty||[]).filter(function(c){return c.done;}).length;
-
-  return React.createElement('div',null,
-    React.createElement('div',{style:{display:'flex',gap:6,marginBottom:16,flexWrap:'wrap'}},
-      rtabs.map(function(t){
-        var a=rtab===t.id;
-        return React.createElement('button',{key:t.id,onClick:function(){setRtab(t.id);},style:{
-          padding:'7px 14px',borderRadius:9,border:'1px solid '+(a?'var(--pol)':'var(--border)'),
-          background:a?'rgba(239,68,68,.12)':'transparent',color:a?'var(--pol)':'var(--muted)',
-          cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',fontWeight:a?600:400
-        }},t.l);
-      })
-    ),
-
-    rtab==='budowa' && React.createElement('div',null,
-      React.createElement('div',{style:{marginBottom:12}},
-        React.createElement('div',{style:{background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.25)',borderRadius:12,padding:'14px',marginBottom:10}},
-          React.createElement('div',{style:{fontWeight:700,color:'var(--pol)',fontSize:13,marginBottom:8}},'📌 WSTĘP – sformułuj tezę'),
-          (rozprawka.wstep||[]).map(function(w,i){
-            return React.createElement('div',{key:w.id,style:{background:'var(--surface)',borderRadius:8,padding:'10px',marginBottom:6,fontSize:12,color:'var(--text)',lineHeight:1.5,fontStyle:'italic'}},w.tresc);
-          })
-        ),
-        React.createElement('div',{style:{background:'rgba(59,130,246,.08)',border:'1px solid rgba(59,130,246,.25)',borderRadius:12,padding:'14px',marginBottom:10}},
-          React.createElement('div',{style:{fontWeight:700,color:'#3b82f6',fontSize:13,marginBottom:8}},'💡 ROZWINIĘCIE – argumenty z lektur'),
-          (rozprawka.argumenty||[]).map(function(a){
-            return React.createElement('div',{key:a.id,style:{background:'var(--surface)',borderRadius:8,padding:'10px',marginBottom:6,fontSize:12,color:'var(--text)',lineHeight:1.5,fontStyle:'italic'}},a.tresc);
-          })
-        ),
-        React.createElement('div',{style:{background:'rgba(34,197,94,.08)',border:'1px solid rgba(34,197,94,.25)',borderRadius:12,padding:'14px'}},
-          React.createElement('div',{style:{fontWeight:700,color:'#22c55e',fontSize:13,marginBottom:8}},'🎯 ZAKOŃCZENIE – podsumuj tezę'),
-          (rozprawka.zakonczenie||[]).map(function(z){
-            return React.createElement('div',{key:z.id,style:{background:'var(--surface)',borderRadius:8,padding:'10px',marginBottom:6,fontSize:12,color:'var(--text)',lineHeight:1.5,fontStyle:'italic'}},z.tresc);
-          })
-        )
-      )
-    ),
-
-    rtab==='wzory' && React.createElement('div',null,
-      React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:14}},'Gotowe schematy zdań do wklejenia i uzupełnienia w swojej rozprawce:'),
-      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-        (rozprawka.wstep||[]).concat(rozprawka.argumenty||[]).concat(rozprawka.zakonczenie||[]).map(function(item){
-          var typ = item.typ || 'argument';
-          var col = typ==='teza'?'var(--pol)':item.id.startsWith('r_zak')?'#22c55e':'#3b82f6';
-          var label = typ==='teza'?'Wstęp':item.id.startsWith('r_zak')?'Zakończenie':'Rozwinięcie';
-          return React.createElement('div',{key:item.id,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'12px'}},
-            React.createElement('div',{style:{fontSize:10,color:col,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6}},label),
-            React.createElement('p',{style:{fontSize:13,color:'var(--text)',margin:'0 0 8px',lineHeight:1.6,fontStyle:'italic'}},item.tresc),
-            React.createElement('button',{
-              onClick:function(){try{navigator.clipboard.writeText(item.tresc);}catch(e){}},
-              style:{fontSize:10,color:'var(--muted)',background:'none',border:'1px solid var(--border)',borderRadius:6,padding:'3px 10px',cursor:'pointer',fontFamily:'Outfit,sans-serif'}
-            },'📋 Kopiuj')
-          );
-        })
-      )
-    ),
-
-    rtab==='slownictwo' && React.createElement('div',null,
-      React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:14}},'Wyrażenia typowe dla języka formalnego w rozprawce:'),
-      React.createElement('div',{style:{display:'flex',flexWrap:'wrap',gap:8}},
-        (rozprawka.slownictwo||[]).map(function(s,i){
-          return React.createElement('div',{key:i,style:{
-            background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,
-            padding:'7px 12px',fontSize:12,color:'var(--text)',cursor:'pointer'
-          },onClick:function(){try{navigator.clipboard.writeText(s);}catch(e){}}},s);
-        })
-      ),
-      React.createElement('p',{style:{color:'var(--muted)',fontSize:11,marginTop:12}},'Kliknij wyrażenie żeby skopiować do schowka.')
-    ),
-
-    rtab==='checklista' && React.createElement('div',null,
-      React.createElement('div',{style:{display:'flex',alignItems:'center',gap:10,marginBottom:16}},
-        React.createElement('div',{style:{fontFamily:'Syne,sans-serif',fontSize:22,fontWeight:700,color:doneChecks===(rozprawka.checklisty||[]).length?'#22c55e':'var(--pol)'}},
-          doneChecks+'/'+(rozprawka.checklisty||[]).length
-        ),
-        React.createElement('div',{style:{flex:1,height:6,background:'var(--surface3)',borderRadius:3}},
-          React.createElement('div',{style:{height:6,width:Math.round(doneChecks/((rozprawka.checklisty||[]).length||1)*100)+'%',background:'#22c55e',borderRadius:3,transition:'width .4s'}})
-        )
-      ),
-      React.createElement('div',{style:{display:'flex',flexDirection:'column',gap:8}},
-        (rozprawka.checklisty||[]).map(function(c){
-          return React.createElement('div',{key:c.id,onClick:function(){toggleChecklist(c.id);},style:{
-            display:'flex',gap:12,alignItems:'center',padding:'12px 14px',borderRadius:10,cursor:'pointer',
-            background:c.done?'rgba(34,197,94,.08)':'var(--surface2)',
-            border:'1px solid '+(c.done?'rgba(34,197,94,.3)':'var(--border)'),transition:'all .15s'
-          }},
-            React.createElement('div',{style:{
-              width:22,height:22,borderRadius:6,border:'2px solid '+(c.done?'#22c55e':'var(--border)'),
-              background:c.done?'#22c55e':'transparent',display:'flex',alignItems:'center',
-              justifyContent:'center',flexShrink:0,transition:'all .15s'
-            }},c.done?React.createElement('span',{style:{color:'#fff',fontSize:12}},'✓'):null),
-            React.createElement('span',{style:{fontSize:13,color:c.done?'#22c55e':'var(--text)',textDecoration:c.done?'line-through':'none'}},c.txt)
-          );
-        })
-      )
-    )
-  );
-};
-
-
 
 var MathView = function MathView(_ref_math) {
   var subject = _ref_math.subject,
