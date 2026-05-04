@@ -7929,8 +7929,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     var statCards = [
       {label:'Wszystkie',val:stats.total,color:'var(--eng)'},
       {label:'Nowe',val:stats['new'],color:'#6b7280'},
-      {label:'W nauce',val:stats.learning,color:'#f97316'},
-      {label:'Opanowane',val:stats.known,color:'#22c55e'},
+      {label:'Uczę się',val:stats.learning,color:'#f97316'},
+      {label:'Umiem',val:stats.known,color:'#22c55e'},
       {label:'Do powtórki',val:stats.due,color:'#ef4444'},
     ];
     return React.createElement('div',null,
@@ -8072,7 +8072,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Filtr statusu'),
           React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-            [{id:'all',label:'Wszystkie',c:'var(--eng)'},{id:'new',label:'Nowe',c:'#6b7280'},{id:'red',label:'Trudne',c:'#ef4444'},{id:'orange',label:'W nauce',c:'#f97316'},{id:'green',label:'Opanowane',c:'#22c55e'}].map(function(f) {
+            [{id:'all',label:'Wszystkie',c:'var(--eng)'},{id:'new',label:'Nowe',c:'#6b7280'},{id:'red',label:'Nie umiem',c:'#ef4444'},{id:'orange',label:'Uczę się',c:'#f97316'},{id:'green',label:'Umiem',c:'#22c55e'}].map(function(f) {
               var a=filterStatus===f.id;
               return React.createElement('button',{key:f.id,onClick:function(){setFilterStatus(f.id);},style:{
                 padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?f.c:'var(--border)'),
@@ -8129,7 +8129,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     var c = srsRef.current[w.id];
     var st = srsGetStatus(c);
     var stColor = st==='green'?'#22c55e':st==='orange'?'#f97316':st==='red'?'#ef4444':'#6b7280';
-    var stLabel = st==='new'?'Nowe':st==='green'?'Opanowane':st==='orange'?'W nauce':'Trudne';
+    var stLabel = st==='new'?'Nowe':st==='green'?'Umiem':st==='orange'?'Uczę się':'Nie umiem';
     return React.createElement('div',null,
       // Header
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
@@ -8196,7 +8196,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
         React.createElement('span',{style:{color:'var(--muted)',fontSize:13}},(idx+1)+' / '+deck.length+' · ⌨️'),
         React.createElement('span',{style:{fontSize:11,color:stColorT,background:stColorT+'22',padding:'2px 8px',borderRadius:10}},
-          stt==='new'?'Nowe':stt==='green'?'Opanowane':stt==='orange'?'W nauce':'Trudne'
+          stt==='new'?'Nowe':stt==='green'?'Umiem':stt==='orange'?'Uczę się':'Nie umiem'
         ),
         React.createElement('button',{
           onClick:endSessionEarly,
@@ -8277,7 +8277,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       ),
       // Mini-statystyki ogółem po sesji
       React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:16}},
-        [{label:'Nowe',val:postStats['new'],c:'#6b7280'},{label:'W nauce',val:postStats.learning,c:'#f97316'},{label:'Opanowane',val:postStats.known,c:'#22c55e'}].map(function(s){
+        [{label:'Nowe',val:postStats['new'],c:'#6b7280'},{label:'Uczę się',val:postStats.learning,c:'#f97316'},{label:'Umiem',val:postStats.known,c:'#22c55e'}].map(function(s){
           return React.createElement('div',{key:s.label,style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 8px',textAlign:'center'}},
             React.createElement('div',{style:{fontSize:20,fontWeight:700,color:s.c,fontFamily:'Syne,sans-serif'}},s.val),
             React.createElement('div',{style:{fontSize:11,color:'var(--muted)',marginTop:3}},s.label)
