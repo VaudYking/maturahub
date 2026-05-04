@@ -9704,6 +9704,8 @@ var PolMotywy = function PolMotywy(_ref_m) {
   var _add = useState(false), adding = _add[0], setAdding = _add[1];
   var _nm = useState({nazwa:'',kolor:'#6b7280',opis:''}), nm = _nm[0], setNm = _nm[1];
   var _editM = useState(null), editingId = _editM[0], setEditingId = _editM[1];
+  var _np = useState({dzielo:'',autor:'',omowienie:''}), np = _np[0], setNp = _np[1];
+  var _addP = useState(false), addingP = _addP[0], setAddingP = _addP[1];
 
   function addMotyw(){
     if(!nm.nazwa.trim()) return;
@@ -9718,8 +9720,6 @@ var PolMotywy = function PolMotywy(_ref_m) {
 
   if (mot) {
     var editing = editingId === mot.id;
-    var _np = useState({dzielo:'',autor:'',omowienie:''}), np = _np[0], setNp = _np[1];
-    var _addP = useState(false), addingP = _addP[0], setAddingP = _addP[1];
     return React.createElement('div',null,
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}},
         React.createElement('button',{onClick:function(){setSel(null);setEditingId(null);},style:{background:'none',border:'none',color:'var(--pol)',cursor:'pointer',fontSize:13,fontFamily:'Outfit,sans-serif'}},'← Wróć'),
