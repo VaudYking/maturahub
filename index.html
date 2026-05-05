@@ -7847,8 +7847,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       if (filterStatus === 'orange' && st !== 'orange') return false;
       if (filterStatus === 'green' && st !== 'green') return false;
       if (filterStatus === 'new' && st !== 'new') return false;
-      if (deckType === 'due' && !srsDue(c)) return false;
-      if (deckType === 'new' && st !== 'new') return false;
+      if (deckType === 'due' && st !== 'red') return false;
+      if (deckType === 'new' && st !== 'orange') return false;
       if (deckType === 'hard' && (st === 'green' || st === 'new')) return false;
       return true;
     });
@@ -8025,13 +8025,17 @@ var EngFlashcards = function EngFlashcards(_ref21) {
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            [{id:'all',label:'Wszystkie'},{id:'due',label:'Do powtórki ('+stats.due+')'},{id:'new',label:'Nowe ('+stats['new']+')'},{id:'hard',label:'Trudne'}].map(function(d) {
+            [{id:'all',label:'Wszystkie',dot:null},{id:'due',label:'Nie umiem',dot:'#ef4444'},{id:'new',label:'Uczę się',dot:'#f97316'},{id:'hard',label:'Trudne',dot:'#facc15'}].map(function(d) {
               var a=deckType===d.id;
               return React.createElement('button',{key:d.id,onClick:function(){setDeckType(d.id);},style:{
                 padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
                 background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
-                cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif'
-              }},d.label);
+                cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',
+                display:'flex',alignItems:'center',gap:6
+              }},
+              d.dot ? React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:d.dot,display:'inline-block',flexShrink:0}}) : null,
+              d.label
+              );
             })
           )
         ),
@@ -8068,20 +8072,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
             'Wybrano: '+filterSecs.length+' dział'+(filterSecs.length>1?'y':'')
           )
         ),
-        // Filtr statusu
-        React.createElement('div',{style:{marginBottom:14}},
-          React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Filtr statusu'),
-          React.createElement('div',{style:{display:'flex',gap:6,flexWrap:'wrap'}},
-            [{id:'all',label:'Wszystkie',c:'var(--eng)'},{id:'new',label:'Nowe',c:'#6b7280'},{id:'red',label:'Nie umiem',c:'#ef4444'},{id:'orange',label:'Uczę się',c:'#f97316'},{id:'green',label:'Umiem',c:'#22c55e'}].map(function(f) {
-              var a=filterStatus===f.id;
-              return React.createElement('button',{key:f.id,onClick:function(){setFilterStatus(f.id);},style:{
-                padding:'5px 12px',borderRadius:8,border:'1px solid '+(a?f.c:'var(--border)'),
-                background:a?(f.c+'22'):'transparent',color:a?f.c:'var(--muted)',
-                cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
-              }},f.label);
-            })
-          )
-        ),
+
         // Liczba słów (NOWE)
         React.createElement('div',{style:{marginBottom:20}},
           React.createElement('div',{style:{display:'flex',justifyContent:'space-between',marginBottom:8}},
@@ -8332,6 +8323,7 @@ var EngQuiz = function EngQuiz(_ref23) {
   var _q2 = useState('pl2en'), qDir = _q2[0], setQDir = _q2[1];
   var _q3 = useState('all'), qSec = _q3[0], setQSec = _q3[1];
   var _q4 = useState(10), qCount = _q4[0], setQCount = _q4[1];
+  var _q4b = useState('all'), qDeckType = _q4b[0], setQDeckType = _q4b[1];
   var _q5 = useState([]), qDeck = _q5[0], setQDeck = _q5[1];
   var _q6 = useState(0), qIdx = _q6[0], setQIdx = _q6[1];
   var _q7 = useState(null), qSelected = _q7[0], setQSelected = _q7[1];
@@ -8346,7 +8338,18 @@ var EngQuiz = function EngQuiz(_ref23) {
   }, [wordsData]);
 
   function buildQuizDeck() {
+    var srsData = srsLoad();
     var pool = qSec==='all' ? allWords : allWords.filter(function(w){return w.secId===qSec;});
+    if (qDeckType !== 'all') {
+      pool = pool.filter(function(w) {
+        var c = srsData[w.id];
+        var st = srsGetStatus(c);
+        if (qDeckType === 'due') return st === 'red';
+        if (qDeckType === 'new') return st === 'orange';
+        if (qDeckType === 'hard') return st !== 'green' && st !== 'new';
+        return true;
+      });
+    }
     pool = pool.sort(function(){return Math.random()-.5;}).slice(0, qCount);
     return pool.map(function(w) {
       var isTyping = qMode==='typing' || (qMode==='mixed' && Math.random()>.5);
@@ -8395,7 +8398,18 @@ var EngQuiz = function EngQuiz(_ref23) {
   }
 
   if (qPhase==='menu') {
+    var srsData2 = srsLoad();
     var pool2 = qSec==='all' ? allWords : allWords.filter(function(w){return w.secId===qSec;});
+    if (qDeckType !== 'all') {
+      pool2 = pool2.filter(function(w) {
+        var c = srsData2[w.id];
+        var st = srsGetStatus(c);
+        if (qDeckType === 'due') return st === 'red';
+        if (qDeckType === 'new') return st === 'orange';
+        if (qDeckType === 'hard') return st !== 'green' && st !== 'new';
+        return true;
+      });
+    }
     return React.createElement('div',null,
       React.createElement('h3',{style:{fontFamily:'Syne,sans-serif',fontSize:18,marginBottom:4}},'🎯 Quiz słówek'),
       React.createElement('p',{style:{color:'var(--muted)',fontSize:13,marginBottom:20}},'Quiz generowany automatycznie z Twoich słówek. Wybierz ustawienia.'),
@@ -8442,6 +8456,23 @@ var EngQuiz = function EngQuiz(_ref23) {
               background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
               cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
             }},(s.name));
+          })
+        )
+      ),
+      React.createElement('div',{style:{marginBottom:14}},
+        React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
+        React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+          [{id:'all',label:'Wszystkie',dot:null},{id:'due',label:'Nie umiem',dot:'#ef4444'},{id:'new',label:'Uczę się',dot:'#f97316'},{id:'hard',label:'Trudne',dot:'#facc15'}].map(function(d) {
+            var a=qDeckType===d.id;
+            return React.createElement('button',{key:d.id,onClick:function(){setQDeckType(d.id);},style:{
+              padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+              background:a?'rgba(59,130,246,.13)':'transparent',color:a?'var(--eng)':'var(--muted)',
+              cursor:'pointer',fontSize:12,fontFamily:'Outfit,sans-serif',
+              display:'flex',alignItems:'center',gap:6
+            }},
+            d.dot ? React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:d.dot,display:'inline-block',flexShrink:0}}) : null,
+            d.label
+            );
           })
         )
       ),
