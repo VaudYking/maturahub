@@ -12035,6 +12035,7 @@ var DiaryView = function DiaryView() {
       border: '1px solid var(--border)'
     }
   }, /*#__PURE__*/React.createElement("table", {
+    id: "diary-table",
     style: {
       borderCollapse: 'collapse',
       width: '100%',
@@ -12139,6 +12140,8 @@ var DiaryView = function DiaryView() {
         min: "0",
         max: "10",
         value: val,
+        "data-cat": ci,
+        "data-day": i,
         onChange: function onChange(e) {
           return setScore(d, cat, e.target.value);
         },
@@ -12166,15 +12169,10 @@ var DiaryView = function DiaryView() {
         onKeyDown: function onKeyDown(e) {
           if (e.key === 'Enter') {
             e.preventDefault();
-            var all = Array.from(document.querySelectorAll('table input[type="number"]'));
-            var cur = e.target;
-            var curIdx = all.indexOf(cur);
-            var numDays = DIARY_DAYS_FULL.length; // 7
-            var nextIdx = curIdx + numDays; // skocz do tej samej kolumny (dnia) w następnym wierszu (kategorii)
-            if (nextIdx < all.length) {
-              all[nextIdx].focus();
-              all[nextIdx].select();
-            }
+            var nextCat = ci + 1;
+            var nextDay = i;
+            var next = document.querySelector('#diary-table input[data-cat="' + nextCat + '"][data-day="' + nextDay + '"]');
+            if (next) { next.focus(); next.select(); }
           }
         }
       }));
