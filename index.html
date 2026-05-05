@@ -6660,6 +6660,8 @@ var EngWords = function EngWords(_ref14) {
         placeholder: "english word...",
         style: {
           fontSize: 13,
+          borderColor: w.status === 'red' ? '#ef4444' : w.status === 'orange' ? '#f97316' : w.status === 'green' ? '#22c55e' : 'var(--border)',
+          background: w.status === 'red' ? 'rgba(239,68,68,.08)' : w.status === 'orange' ? 'rgba(249,115,22,.08)' : w.status === 'green' ? 'rgba(34,197,94,.08)' : 'var(--surface3)',
           visibility: hideCol === 'en' ? 'hidden' : 'visible'
         }
       }), /*#__PURE__*/React.createElement("div", {
@@ -7762,6 +7764,7 @@ function srsDue(card) {
 // ─── ENG FLASHCARDS (rozbudowane) ─────────────────────────────────────────────
 var EngFlashcards = function EngFlashcards(_ref21) {
   var wordsData = _ref21.wordsData;
+  var onWordStatusChange = _ref21.onWordStatusChange;
 
   var allWords = React.useMemo(function() {
     var out = [];
@@ -7788,6 +7791,12 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     srsRef.current = Object.assign({}, srsRef.current, _defineProperty({}, wordId, updated));
     srsSave(srsRef.current);
     setSrsData(Object.assign({}, srsRef.current)); // trigger re-render
+    // Sync status to Słowa tab
+    if (onWordStatusChange) {
+      var newStatus = srsGetStatus(updated);
+      var word = allWords.find(function(w){ return w.id === wordId; });
+      if (word) onWordStatusChange(word.secId, wordId, newStatus==='new'?null:newStatus);
+    }
   }
 
   function resetSrs() {
@@ -7813,6 +7822,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
   var _m12 = useState(null), typingResult = _m12[0], setTypingResult = _m12[1];
   var _m13 = useState('settings'), menuTab = _m13[0], setMenuTab = _m13[1];
   var _m14 = useState([]), cardDirs = _m14[0], setCardDirs = _m14[1];
+  var _m15 = useState(null), expandedSec = _m15[0], setExpandedSec = _m15[1];
+  var _m16 = useState(null), expandedSecFilter = _m16[0], setExpandedSecFilter = _m16[1];
   var typingRef = useRef(null);
   // Helper: toggle działu w filterSecs
   function toggleSec(secId) {
@@ -7928,10 +7939,9 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     var availableCount = getFilteredPool().length; // bez limitu!
     var statCards = [
       {label:'Wszystkie',val:stats.total,color:'var(--eng)'},
-      {label:'Nowe',val:stats['new'],color:'#6b7280'},
+      {label:'Nie umiem',val:stats['new']+((stats.due)||0),color:'#ef4444'},
       {label:'Uczę się',val:stats.learning,color:'#f97316'},
       {label:'Umiem',val:stats.known,color:'#22c55e'},
-      {label:'Do powtórki',val:stats.due,color:'#ef4444'},
     ];
     return React.createElement('div',null,
       // Tabs
@@ -7960,27 +7970,76 @@ var EngFlashcards = function EngFlashcards(_ref21) {
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:10,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Postęp wg działu'),
           sections.map(function(sec) {
             var secWords = allWords.filter(function(w){return w.secId===sec.id;});
-            var statsSec = {new:0, learning:0, known:0};
+            var statsSec = {red:[], orange:[], green:[], new:[]};
             secWords.forEach(function(w){
               var st = srsGetStatus(srsRef.current[w.id]);
-              if (st==='new') statsSec.new++;
-              else if (st==='orange') statsSec.learning++;
-              else statsSec.known++;
+              if (st==='green') statsSec.green.push(w);
+              else if (st==='orange') statsSec.orange.push(w);
+              else if (st==='red') statsSec.red.push(w);
+              else statsSec.new.push(w);
             });
-            var pct = secWords.length ? Math.round(statsSec.known/secWords.length*100) : 0;
-            return React.createElement('div',{key:sec.id,style:{marginBottom:12,padding:'10px 12px',background:'var(--surface2)',borderRadius:10,border:'1px solid var(--border)'}},
-              React.createElement('div',{style:{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:6}},
-                React.createElement('span',{style:{color:'var(--text)',fontWeight:500}},sec.name),
-                React.createElement('span',{style:{color:'var(--muted)'}},statsSec.known+'/'+secWords.length+' opanowanych')
+            var nieum = statsSec.red.length + statsSec.new.length;
+            var isExpanded = expandedSec === sec.id;
+            var activeFilter = expandedSec === sec.id ? expandedSecFilter : null;
+
+            var filteredWords = !activeFilter ? [] :
+              activeFilter === 'red' ? statsSec.red.concat(statsSec.new) :
+              activeFilter === 'orange' ? statsSec.orange :
+              statsSec.green;
+
+            return React.createElement('div',{key:sec.id,style:{marginBottom:10,background:'var(--surface2)',borderRadius:12,border:'1px solid var(--border)',overflow:'hidden'}},
+              // Header row
+              React.createElement('div',{
+                onClick:function(){setExpandedSec(isExpanded?null:sec.id); setExpandedSecFilter(null);},
+                style:{padding:'10px 14px',cursor:'pointer',userSelect:'none'}
+              },
+                React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}},
+                  React.createElement('span',{style:{color:'var(--text)',fontWeight:500,fontSize:13}},sec.name),
+                  React.createElement('span',{style:{color:'var(--muted)',fontSize:11}},isExpanded?'▲':'▼')
+                ),
+                React.createElement('div',{style:{height:6,background:'var(--surface3)',borderRadius:3,overflow:'hidden',display:'flex'}},
+                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.green.length/secWords.length*100):0)+'%',background:'#22c55e',transition:'width .4s'}}),
+                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.orange.length/secWords.length*100):0)+'%',background:'#f97316',transition:'width .4s'}}),
+                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round((statsSec.red.length+statsSec.new.length)/secWords.length*100):0)+'%',background:'#ef4444',transition:'width .4s'}})
+                ),
+                React.createElement('div',{style:{display:'flex',gap:10,marginTop:5,fontSize:11}},
+                  React.createElement('span',{style:{color:'#22c55e',cursor:'pointer',fontWeight: activeFilter==='green'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='green'?null:'green');}},
+                    '🟢 '+statsSec.green.length+' umie'),
+                  React.createElement('span',{style:{color:'#f97316',cursor:'pointer',fontWeight: activeFilter==='orange'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='orange'?null:'orange');}},
+                    '🟠 '+statsSec.orange.length+' uczy się'),
+                  React.createElement('span',{style:{color:'#ef4444',cursor:'pointer',fontWeight: activeFilter==='red'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='red'?null:'red');}},
+                    '🔴 '+nieum+' nie umie')
+                )
               ),
-              React.createElement('div',{style:{height:6,background:'var(--surface3)',borderRadius:3,overflow:'hidden',display:'flex'}},
-                React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.known/secWords.length*100):0)+'%',background:'#22c55e',transition:'width .4s'}}),
-                React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.learning/secWords.length*100):0)+'%',background:'#f97316',transition:'width .4s'}})
-              ),
-              React.createElement('div',{style:{display:'flex',gap:12,marginTop:5,fontSize:10,color:'var(--muted)'}},
-                React.createElement('span',{style:{color:'#22c55e'}},'● '+statsSec.known+' opanowanych'),
-                React.createElement('span',{style:{color:'#f97316'}},'● '+statsSec.learning+' w nauce'),
-                React.createElement('span',{style:{color:'#6b7280'}},'● '+statsSec['new']+' nowych')
+              // Expanded word list
+              isExpanded && React.createElement('div',{style:{borderTop:'1px solid var(--border)',padding:'6px 0'}},
+                // Filter pills inside expanded panel
+                React.createElement('div',{style:{display:'flex',gap:6,padding:'6px 14px 8px'}},
+                  [{id:null,label:'Wszystkie'},{id:'green',label:'🟢 Umiem'},{id:'orange',label:'🟠 Uczę się'},{id:'red',label:'🔴 Nie umiem'}].map(function(f){
+                    var a = expandedSecFilter===f.id;
+                    return React.createElement('button',{key:String(f.id),onClick:function(){setExpandedSecFilter(f.id);},style:{
+                      padding:'3px 10px',borderRadius:20,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
+                      background:a?'rgba(59,130,246,.12)':'transparent',color:a?'var(--eng)':'var(--muted)',
+                      cursor:'pointer',fontSize:11,fontFamily:'Outfit,sans-serif'
+                    }},f.label);
+                  })
+                ),
+                (expandedSecFilter===null ? secWords :
+                  expandedSecFilter==='red' ? statsSec.red.concat(statsSec.new) :
+                  expandedSecFilter==='orange' ? statsSec.orange :
+                  statsSec.green
+                ).map(function(w){
+                  var st = srsGetStatus(srsRef.current[w.id]);
+                  var dot = st==='green'?'#22c55e':st==='orange'?'#f97316':'#ef4444';
+                  return React.createElement('div',{key:w.id,style:{
+                    display:'flex',alignItems:'center',gap:8,padding:'5px 14px',
+                    fontSize:12,borderBottom:'1px solid var(--border)',
+                  }},
+                    React.createElement('span',{style:{width:8,height:8,borderRadius:'50%',background:dot,flexShrink:0,display:'inline-block'}}),
+                    React.createElement('span',{style:{color:'var(--text)',flex:1}},w.pl),
+                    React.createElement('span',{style:{color:'var(--muted)'}},w.en)
+                  );
+                })
               )
             );
           })
@@ -9060,7 +9119,17 @@ var EnglishView = function EnglishView(_ref25) {
       return updateEngData('words', v);
     }
   }), tab === 'flashcards' && /*#__PURE__*/React.createElement(EngFlashcards, {
-    wordsData: eng.words
+    wordsData: eng.words,
+    onWordStatusChange: function(secId, wId, status) {
+      var updated = (eng.words||[]).map(function(s) {
+        return s.id === secId ? Object.assign({}, s, {
+          words: (s.words||[]).map(function(w) {
+            return w.id === wId ? Object.assign({}, w, {status: status}) : w;
+          })
+        }) : s;
+      });
+      updateEngData('words', updated);
+    }
   }), tab === 'quiz' && /*#__PURE__*/React.createElement(EngQuiz, {
     data: eng.quiz || [],
     onChange: function onChange(v) {
