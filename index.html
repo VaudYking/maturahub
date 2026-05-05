@@ -7847,9 +7847,9 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       if (filterStatus === 'orange' && st !== 'orange') return false;
       if (filterStatus === 'green' && st !== 'green') return false;
       if (filterStatus === 'new' && st !== 'new') return false;
-      if (deckType === 'due' && st !== 'red') return false;
-      if (deckType === 'new' && st !== 'orange') return false;
-      if (deckType === 'hard' && (st === 'green' || st === 'new')) return false;
+      if (deckType === 'red' && st !== 'red') return false;
+      if (deckType === 'orange' && st !== 'orange') return false;
+      if (deckType === 'green' && st !== 'green') return false;
       return true;
     });
   }
@@ -8025,7 +8025,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
         React.createElement('div',{style:{marginBottom:14}},
           React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
           React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-            [{id:'all',label:'Wszystkie',dot:null},{id:'due',label:'Nie umiem',dot:'#ef4444'},{id:'new',label:'Uczę się',dot:'#f97316'},{id:'hard',label:'Trudne',dot:'#facc15'}].map(function(d) {
+            [{id:'all',label:'Wszystkie',dot:null},{id:'red',label:'Nie umiem',dot:'#ef4444'},{id:'orange',label:'Uczę się',dot:'#f97316'},{id:'green',label:'Umiem',dot:'#22c55e'}].map(function(d) {
               var a=deckType===d.id;
               return React.createElement('button',{key:d.id,onClick:function(){setDeckType(d.id);},style:{
                 padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
@@ -8344,9 +8344,9 @@ var EngQuiz = function EngQuiz(_ref23) {
       pool = pool.filter(function(w) {
         var c = srsData[w.id];
         var st = srsGetStatus(c);
-        if (qDeckType === 'due') return st === 'red';
-        if (qDeckType === 'new') return st === 'orange';
-        if (qDeckType === 'hard') return st !== 'green' && st !== 'new';
+        if (qDeckType === 'red') return st === 'red';
+        if (qDeckType === 'orange') return st === 'orange';
+        if (qDeckType === 'green') return st === 'green';
         return true;
       });
     }
@@ -8404,9 +8404,9 @@ var EngQuiz = function EngQuiz(_ref23) {
       pool2 = pool2.filter(function(w) {
         var c = srsData2[w.id];
         var st = srsGetStatus(c);
-        if (qDeckType === 'due') return st === 'red';
-        if (qDeckType === 'new') return st === 'orange';
-        if (qDeckType === 'hard') return st !== 'green' && st !== 'new';
+        if (qDeckType === 'red') return st === 'red';
+        if (qDeckType === 'orange') return st === 'orange';
+        if (qDeckType === 'green') return st === 'green';
         return true;
       });
     }
@@ -8462,7 +8462,7 @@ var EngQuiz = function EngQuiz(_ref23) {
       React.createElement('div',{style:{marginBottom:14}},
         React.createElement('div',{style:{fontSize:12,color:'var(--muted)',marginBottom:8,fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}},'Zestaw'),
         React.createElement('div',{style:{display:'flex',gap:8,flexWrap:'wrap'}},
-          [{id:'all',label:'Wszystkie',dot:null},{id:'due',label:'Nie umiem',dot:'#ef4444'},{id:'new',label:'Uczę się',dot:'#f97316'},{id:'hard',label:'Trudne',dot:'#facc15'}].map(function(d) {
+          [{id:'all',label:'Wszystkie',dot:null},{id:'red',label:'Nie umiem',dot:'#ef4444'},{id:'orange',label:'Uczę się',dot:'#f97316'},{id:'green',label:'Umiem',dot:'#22c55e'}].map(function(d) {
             var a=qDeckType===d.id;
             return React.createElement('button',{key:d.id,onClick:function(){setQDeckType(d.id);},style:{
               padding:'7px 14px',borderRadius:8,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
