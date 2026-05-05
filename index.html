@@ -12142,6 +12142,7 @@ var DiaryView = function DiaryView() {
         value: val,
         "data-cat": ci,
         "data-day": i,
+        tabIndex: i * DIARY_CATS.length + ci + 1,
         onChange: function onChange(e) {
           return setScore(d, cat, e.target.value);
         },
