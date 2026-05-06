@@ -13315,6 +13315,54 @@ function App() {
       }
     };
   };
+
+  // ── BRAMKA: apka czeka na Supabase przed pokazaniem czegokolwiek ──
+  var _appReady = React.useState('loading'); // 'loading' | 'ready' | 'offline' | 'error'
+  var appStatus = _appReady[0], setAppStatus = _appReady[1];
+
+  // Jeśli apka nie jest gotowa — pokaż ekran oczekiwania
+  if (appStatus === 'loading') {
+    return React.createElement('div', {style:{
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif'
+    }},
+      React.createElement('div', {style:{fontSize:48}}, '📡'),
+      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Łączenie z serwerem...'),
+      React.createElement('div', {style:{fontSize:13, color:'var(--muted)'}}, 'Sprawdzanie aktualnych danych')
+    );
+  }
+  if (appStatus === 'offline') {
+    return React.createElement('div', {style:{
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif', textAlign:'center', padding:'0 24px'
+    }},
+      React.createElement('div', {style:{fontSize:48}}, '📵'),
+      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Brak połączenia z internetem'),
+      React.createElement('div', {style:{fontSize:13, color:'var(--muted)', maxWidth:300}}, 'Aplikacja wymaga aktywnego połączenia z internetem, aby chronić Twoje dane przed błędami synchronizacji.'),
+      React.createElement('button', {
+        onClick: function(){ setAppStatus('loading'); loadFromSupabase().then(function(data){
+          if (data) setAppStatus('ready'); else setAppStatus(navigator.onLine ? 'error' : 'offline');
+        }); },
+        style:{marginTop:8, padding:'10px 24px', borderRadius:12, border:'none', background:'var(--eng)', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'Outfit,sans-serif'}
+      }, '🔄 Spróbuj ponownie')
+    );
+  }
+  if (appStatus === 'error') {
+    return React.createElement('div', {style:{
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif', textAlign:'center', padding:'0 24px'
+    }},
+      React.createElement('div', {style:{fontSize:48}}, '⚠️'),
+      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Błąd połączenia z serwerem'),
+      React.createElement('div', {style:{fontSize:13, color:'var(--muted)', maxWidth:300}}, 'Nie udało się pobrać danych z serwera. Sprawdź internet i spróbuj ponownie.'),
+      React.createElement('button', {
+        onClick: function(){ setAppStatus('loading'); loadFromSupabase().then(function(data){
+          if (data) setAppStatus('ready'); else setAppStatus(navigator.onLine ? 'error' : 'offline');
+        }); },
+        style:{marginTop:8, padding:'10px 24px', borderRadius:12, border:'none', background:'var(--eng)', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'Outfit,sans-serif'}
+      }, '🔄 Spróbuj ponownie')
+    );
+  }
   var _useState121 = useState(function () {
       var s = initState();
       setTimeout(function () {
@@ -13352,12 +13400,13 @@ function App() {
     };
   }, []);
 
-  // Przy starcie: spróbuj załadować z Supabase (nowsze dane niż localStorage)
+  // Przy starcie: WYMAGAJ danych z Supabase zanim pokażesz apkę
   useEffect(function () {
     setSyncStatusState('syncing');
     loadFromSupabase().then(function (remoteData) {
       if (!remoteData) {
         setSyncStatusState(navigator.onLine ? 'error' : 'offline');
+        setAppStatus(navigator.onLine ? 'error' : 'offline');
         return;
       }
       setState(function (prev) {
@@ -13436,8 +13485,10 @@ function App() {
           streakReadyRef.current = true;
           return merged;
         }
+        setAppStatus('ready');
         return prev;
       });
+      setAppStatus('ready');
       setSyncStatusState('synced');
       // Auto-backup raz dziennie
       setState(function(cur) { maybeAutoBackup(cur); return cur; });
