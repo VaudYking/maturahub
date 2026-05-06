@@ -13292,75 +13292,27 @@ function App() {
   var initState = function initState() {
     var saved = loadData();
     if (saved && saved.subjects) return _objectSpread(_objectSpread({}, saved), {}, {
-      chatData: saved.chatData || {
-        math: [],
-        polish: [],
-        english: []
-      }
+      chatData: saved.chatData || { math: [], polish: [], english: [] }
     });
     return {
       subjects: INITIAL_SUBJECTS,
-      tracker: {
-        streak: 1,
-        todayMinutes: 0,
-        pomodorosToday: 0,
-        lastActive: getTodayKey(),
-        weekHistory: [0, 0, 0, 0, 0, 0, 0],
-        totalDays: 1
-      },
-      chatData: {
-        math: [],
-        polish: [],
-        english: []
-      }
+      tracker: { streak: 1, todayMinutes: 0, pomodorosToday: 0, lastActive: getTodayKey(), weekHistory: [0,0,0,0,0,0,0], totalDays: 1 },
+      chatData: { math: [], polish: [], english: [] }
     };
   };
 
-  // ── BRAMKA: apka czeka na Supabase przed pokazaniem czegokolwiek ──
-  var _appReady = React.useState('loading'); // 'loading' | 'ready' | 'offline' | 'error'
-  var appStatus = _appReady[0], setAppStatus = _appReady[1];
+  // Krótki ekran ładowania tylko na start — max 3s, potem apka działa bez względu na wynik
+  var _appReady = React.useState(false);
+  var appReady = _appReady[0], setAppReady = _appReady[1];
 
-  // Jeśli apka nie jest gotowa — pokaż ekran oczekiwania
-  if (appStatus === 'loading') {
+  if (!appReady) {
     return React.createElement('div', {style:{
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif'
+      height:'100vh', gap:12, fontFamily:'Outfit,sans-serif'
     }},
-      React.createElement('div', {style:{fontSize:48}}, '📡'),
-      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Łączenie z serwerem...'),
-      React.createElement('div', {style:{fontSize:13, color:'var(--muted)'}}, 'Sprawdzanie aktualnych danych')
-    );
-  }
-  if (appStatus === 'offline') {
-    return React.createElement('div', {style:{
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif', textAlign:'center', padding:'0 24px'
-    }},
-      React.createElement('div', {style:{fontSize:48}}, '📵'),
-      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Brak połączenia z internetem'),
-      React.createElement('div', {style:{fontSize:13, color:'var(--muted)', maxWidth:300}}, 'Aplikacja wymaga aktywnego połączenia z internetem, aby chronić Twoje dane przed błędami synchronizacji.'),
-      React.createElement('button', {
-        onClick: function(){ setAppStatus('loading'); loadFromSupabase().then(function(data){
-          if (data) setAppStatus('ready'); else setAppStatus(navigator.onLine ? 'error' : 'offline');
-        }); },
-        style:{marginTop:8, padding:'10px 24px', borderRadius:12, border:'none', background:'var(--eng)', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'Outfit,sans-serif'}
-      }, '🔄 Spróbuj ponownie')
-    );
-  }
-  if (appStatus === 'error') {
-    return React.createElement('div', {style:{
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      height:'100vh', gap:16, fontFamily:'Outfit,sans-serif', textAlign:'center', padding:'0 24px'
-    }},
-      React.createElement('div', {style:{fontSize:48}}, '⚠️'),
-      React.createElement('div', {style:{fontSize:18, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Błąd połączenia z serwerem'),
-      React.createElement('div', {style:{fontSize:13, color:'var(--muted)', maxWidth:300}}, 'Nie udało się pobrać danych z serwera. Sprawdź internet i spróbuj ponownie.'),
-      React.createElement('button', {
-        onClick: function(){ setAppStatus('loading'); loadFromSupabase().then(function(data){
-          if (data) setAppStatus('ready'); else setAppStatus(navigator.onLine ? 'error' : 'offline');
-        }); },
-        style:{marginTop:8, padding:'10px 24px', borderRadius:12, border:'none', background:'var(--eng)', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'Outfit,sans-serif'}
-      }, '🔄 Spróbuj ponownie')
+      React.createElement('div', {style:{fontSize:40}}, '📡'),
+      React.createElement('div', {style:{fontSize:16, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Ładowanie danych...'),
+      React.createElement('div', {style:{fontSize:12, color:'var(--muted)'}}, 'Synchronizacja z serwerem')
     );
   }
   var _useState121 = useState(function () {
@@ -13400,13 +13352,16 @@ function App() {
     };
   }, []);
 
-  // Przy starcie: WYMAGAJ danych z Supabase zanim pokażesz apkę
+  // Przy starcie: spróbuj załadować z Supabase (nowsze dane niż localStorage)
   useEffect(function () {
     setSyncStatusState('syncing');
+    // Max 3s timeout — potem apka działa z localStorage
+    var fallback = setTimeout(function() { setAppReady(true); }, 3000);
     loadFromSupabase().then(function (remoteData) {
+      clearTimeout(fallback);
+      setAppReady(true);
       if (!remoteData) {
         setSyncStatusState(navigator.onLine ? 'error' : 'offline');
-        setAppStatus(navigator.onLine ? 'error' : 'offline');
         return;
       }
       setState(function (prev) {
@@ -13485,10 +13440,8 @@ function App() {
           streakReadyRef.current = true;
           return merged;
         }
-        setAppStatus('ready');
         return prev;
       });
-      setAppStatus('ready');
       setSyncStatusState('synced');
       // Auto-backup raz dziennie
       setState(function(cur) { maybeAutoBackup(cur); return cur; });
