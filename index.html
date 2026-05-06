@@ -13085,7 +13085,8 @@ var BackupModal = function BackupModal(_ref31) {
   ))))), document.body);
 };
 // ─── AI VIEW ──────────────────────────────────────────────────────────────────
-var CF_AI_URL = 'https://restless-violet-d7a2.sobczynskidawid90.workers.dev';
+var GROK_API_KEY = localStorage.getItem('grok_api_key') || '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';
+var GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
 
 var AIView = function AIView(_ref_ai) {
   var subjects = _ref_ai.subjects;
@@ -13141,33 +13142,34 @@ var AIView = function AIView(_ref_ai) {
     setMessages(newMessages);
     setLoading(true);
 
-    // Build messages for Cloudflare AI (OpenAI-compatible format)
-    var cfMessages = [{ role: 'system', content: buildSystemPrompt() }].concat(
+    // Build messages for Grok (OpenAI-compatible format)
+    var grokMessages = [{ role: 'system', content: buildSystemPrompt() }].concat(
       newMessages.map(function(m) { return { role: m.role === 'assistant' ? 'assistant' : 'user', content: m.text }; })
     );
 
-    fetch(CF_AI_URL, {
+    fetch(GROK_API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + GROK_API_KEY
       },
       body: JSON.stringify({
-        messages: cfMessages,
+        model: 'grok-3-mini',
+        messages: grokMessages,
         max_tokens: 1200,
         temperature: 0.7
       })
     }).then(function(r) { return r.json(); }).then(function(data) {
-      if (!data.success) {
-        var msg = data.errors && data.errors[0] && data.errors[0].message || 'nieznany błąd';
-        setError('Błąd AI: ' + msg);
+      if (data.error) {
+        setError('Błąd Grok: ' + (data.error.message || JSON.stringify(data.error)));
       } else {
-        var txt = data.result && data.result.response || '...';
+        var txt = data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '...';
         setMessages(newMessages.concat([{ role: 'assistant', text: txt }]));
       }
       setLoading(false);
       if (inputRef.current) inputRef.current.focus();
-    }).catch(function() {
-      setError('Brak połączenia. Sprawdź internet.');
+    }).catch(function(err) {
+      setError('Brak połączenia z Grok. Sprawdź internet.');
       setLoading(false);
     });
   }
@@ -13196,7 +13198,7 @@ var AIView = function AIView(_ref_ai) {
           /*#__PURE__*/React.createElement("span", { style: { color: cs.eng } }, "AI "), "Asystent Matury"
         ),
         /*#__PURE__*/React.createElement("div", { style: { fontSize:12, color: cs.muted, marginTop:2 } },
-          "Llama 3.1 (Cloudflare AI) • mat. " + p.math + "% • pol. " + p.polish + "% • ang. " + p.english + "%"
+          "Grok 3 Mini (xAI) • mat. " + p.math + "% • pol. " + p.polish + "% • ang. " + p.english + "%"
         )
       ),
       messages.length > 0 && /*#__PURE__*/React.createElement("button", {
