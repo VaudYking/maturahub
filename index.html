@@ -8914,6 +8914,135 @@ var EngIdioms = function EngIdioms(_ref24) {
   })));
 };
 
+// ─── SHEETS TAB ───────────────────────────────────────────────────────────────
+var SheetsTab = function SheetsTab(_ref_sheets) {
+  var sheets = _ref_sheets.sheets, onUpdate = _ref_sheets.onUpdate, color = _ref_sheets.color;
+  var _ss = useState(null), editing = _ss[0], setEditing = _ss[1];
+  var _sa = useState(false), adding = _sa[0], setAdding = _sa[1];
+  var _sf = useState({title:'',url:'',desc:''}), form = _sf[0], setForm = _sf[1];
+
+  var list = sheets || [];
+  var accentColor = color || 'var(--eng)';
+
+  function startAdd() {
+    setForm({title:'',url:'',desc:''});
+    setAdding(true);
+    setEditing(null);
+  }
+  function startEdit(idx) {
+    setForm(Object.assign({}, list[idx]));
+    setEditing(idx);
+    setAdding(false);
+  }
+  function save() {
+    if (!form.title && !form.url) return;
+    var updated;
+    if (adding) {
+      updated = list.concat([Object.assign({id: Date.now()+'_'+Math.random().toString(36).slice(2)}, form)]);
+    } else {
+      updated = list.map(function(s,i){ return i===editing ? Object.assign({},s,form) : s; });
+    }
+    onUpdate(updated);
+    setAdding(false);
+    setEditing(null);
+  }
+  function remove(idx) {
+    if (!window.confirm('Usunąć ten arkusz?')) return;
+    onUpdate(list.filter(function(_,i){ return i!==idx; }));
+  }
+  function cancel() { setAdding(false); setEditing(null); }
+
+  var formVisible = adding || editing !== null;
+
+  return React.createElement('div', {style:{maxWidth:700}},
+    // Lista arkuszy
+    list.length === 0 && !formVisible && React.createElement('div', {style:{
+      textAlign:'center', padding:'50px 20px', color:'var(--muted)', fontSize:14
+    }},
+      React.createElement('div', {style:{fontSize:48, marginBottom:12}}, '📄'),
+      React.createElement('p', null, 'Brak arkuszy. Dodaj pierwszy arkusz poniżej.')
+    ),
+    list.map(function(s, idx) {
+      var isEdit = editing === idx;
+      return React.createElement('div', {key:s.id||idx, style:{
+        background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12,
+        padding:'14px 16px', marginBottom:10
+      }},
+        isEdit ? React.createElement('div', null,
+          React.createElement('input', {
+            value: form.title, placeholder:'Tytuł arkusza...',
+            onChange: function(e){ setForm(Object.assign({},form,{title:e.target.value})); },
+            style:{width:'100%',marginBottom:8,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,boxSizing:'border-box'}
+          }),
+          React.createElement('input', {
+            value: form.url, placeholder:'Link do arkusza (URL)...',
+            onChange: function(e){ setForm(Object.assign({},form,{url:e.target.value})); },
+            style:{width:'100%',marginBottom:8,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,boxSizing:'border-box'}
+          }),
+          React.createElement('textarea', {
+            value: form.desc, placeholder:'Opis (opcjonalnie)...',
+            onChange: function(e){ setForm(Object.assign({},form,{desc:e.target.value})); },
+            rows: 2,
+            style:{width:'100%',marginBottom:10,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,resize:'vertical',boxSizing:'border-box'}
+          }),
+          React.createElement('div', {style:{display:'flex',gap:8}},
+            React.createElement('button', {onClick:save, style:{padding:'7px 18px',borderRadius:8,border:'none',background:accentColor,color:'#fff',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:13,fontWeight:600}}, 'Zapisz'),
+            React.createElement('button', {onClick:cancel, style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--muted)',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:13}}, 'Anuluj')
+          )
+        ) : React.createElement('div', null,
+          React.createElement('div', {style:{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:8}},
+            React.createElement('div', {style:{flex:1,minWidth:0}},
+              React.createElement('div', {style:{fontWeight:700,fontSize:14,color:'var(--text)',marginBottom:4,fontFamily:'Syne,sans-serif'}}, s.title||'(bez tytułu)'),
+              s.desc && React.createElement('div', {style:{fontSize:12,color:'var(--muted)',marginBottom:6}}, s.desc),
+              s.url && React.createElement('a', {
+                href: s.url, target:'_blank', rel:'noopener noreferrer',
+                style:{fontSize:12,color:accentColor,wordBreak:'break-all',textDecoration:'none'}
+              }, '🔗 ', s.url)
+            ),
+            React.createElement('div', {style:{display:'flex',gap:6,flexShrink:0}},
+              React.createElement('button', {onClick:function(){startEdit(idx);}, style:{padding:'5px 12px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--muted)',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:12}}, '✏️ Edytuj'),
+              React.createElement('button', {onClick:function(){remove(idx);}, style:{padding:'5px 10px',borderRadius:8,border:'1px solid transparent',background:'transparent',color:'#ef4444',cursor:'pointer',fontSize:12}}, '🗑')
+            )
+          )
+        )
+      );
+    }),
+    // Formularz dodawania
+    adding && React.createElement('div', {style:{
+      background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:12,
+      padding:'14px 16px', marginBottom:10
+    }},
+      React.createElement('div', {style:{fontWeight:600,fontSize:13,marginBottom:10,color:accentColor}}, '+ Nowy arkusz'),
+      React.createElement('input', {
+        value: form.title, placeholder:'Tytuł arkusza...',
+        autoFocus: true,
+        onChange: function(e){ setForm(Object.assign({},form,{title:e.target.value})); },
+        style:{width:'100%',marginBottom:8,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,boxSizing:'border-box'}
+      }),
+      React.createElement('input', {
+        value: form.url, placeholder:'Link do arkusza (URL)...',
+        onChange: function(e){ setForm(Object.assign({},form,{url:e.target.value})); },
+        style:{width:'100%',marginBottom:8,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,boxSizing:'border-box'}
+      }),
+      React.createElement('textarea', {
+        value: form.desc, placeholder:'Opis (opcjonalnie)...',
+        onChange: function(e){ setForm(Object.assign({},form,{desc:e.target.value})); },
+        rows: 2,
+        style:{width:'100%',marginBottom:10,padding:'8px 10px',borderRadius:8,border:'1px solid var(--border)',background:'var(--surface3)',color:'var(--text)',fontFamily:'Outfit,sans-serif',fontSize:13,resize:'vertical',boxSizing:'border-box'}
+      }),
+      React.createElement('div', {style:{display:'flex',gap:8}},
+        React.createElement('button', {onClick:save, style:{padding:'7px 18px',borderRadius:8,border:'none',background:accentColor,color:'#fff',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:13,fontWeight:600}}, 'Dodaj'),
+        React.createElement('button', {onClick:cancel, style:{padding:'7px 14px',borderRadius:8,border:'1px solid var(--border)',background:'transparent',color:'var(--muted)',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:13}}, 'Anuluj')
+      )
+    ),
+    // Przycisk dodaj
+    !formVisible && React.createElement('button', {
+      onClick: startAdd,
+      style:{marginTop:8,padding:'8px 18px',borderRadius:10,border:'1px dashed var(--border)',background:'transparent',color:'var(--muted)',cursor:'pointer',fontFamily:'Outfit,sans-serif',fontSize:13,width:'100%'}
+    }, '+ Dodaj arkusz')
+  );
+};
+
 /* ---------- ENGLISH VIEW MAIN ---------- */
 var EnglishView = function EnglishView(_ref25) {
   var subject = _ref25.subject,
@@ -8971,6 +9100,10 @@ var EnglishView = function EnglishView(_ref25) {
     id: 'email',
     label: 'Email',
     emoji: '✉️'
+  }, {
+    id: 'sheets',
+    label: 'Arkusze',
+    emoji: '📄'
   }];
   return /*#__PURE__*/React.createElement("div", {
     className: "fade-in"
@@ -9156,6 +9289,10 @@ var EnglishView = function EnglishView(_ref25) {
     onChange: function onChange(v) {
       return updateEngData('email', v);
     }
+  }), tab === 'sheets' && React.createElement(SheetsTab, {
+    sheets: subject.sheets || [],
+    color: 'var(--eng)',
+    onUpdate: function(v){ _onUpdate(Object.assign({},subject,{sheets:v})); }
   })), /*#__PURE__*/React.createElement("div", {
     style: {
       marginTop: 32,
@@ -9675,7 +9812,7 @@ var PolishView = function PolishView(_ref_pol) {
   function updZadania(fn){ var n=fn(zadania); savePolData(Object.assign({},polData,{zadania:n})); }
   function updRozprawka(fn){ var n=fn(rozprawka); savePolData(Object.assign({},polData,{rozprawka:n})); }
 
-  var TABS=[{id:'dzialy',l:'Działy',e:'📚'},{id:'lektury',l:'Lektury',e:'📖'},{id:'motywy',l:'Motywy',e:'🎭'},{id:'zadania',l:'Zadania',e:'✏️'},{id:'rozprawka',l:'Rozprawka',e:'📝'}];
+  var TABS=[{id:'dzialy',l:'Działy',e:'📚'},{id:'lektury',l:'Lektury',e:'📖'},{id:'motywy',l:'Motywy',e:'🎭'},{id:'zadania',l:'Zadania',e:'✏️'},{id:'rozprawka',l:'Rozprawka',e:'📝'},{id:'sheets',l:'Arkusze',e:'📄'}];
 
   return React.createElement('div',{className:'fade-in'},
     React.createElement('div',{style:{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)',overflowX:'auto'}},
@@ -9693,7 +9830,8 @@ var PolishView = function PolishView(_ref_pol) {
     polTab==='lektury'  && React.createElement(PolLektury,{lektury:lektury,onUpdate:updLektury}),
     polTab==='motywy'   && React.createElement(PolMotywy,{motywy:motywy,onUpdate:updMotywy}),
     polTab==='zadania'  && React.createElement(PolZadania,{zadania:zadania,onUpdate:updZadania}),
-    polTab==='rozprawka'&& React.createElement(PolRozprawka,{rozprawka:rozprawka,onUpdate:updRozprawka})
+    polTab==='rozprawka'&& React.createElement(PolRozprawka,{rozprawka:rozprawka,onUpdate:updRozprawka}),
+    polTab==='sheets'   && React.createElement(SheetsTab,{sheets:subject.sheets||[],color:'var(--pol)',onUpdate:function(v){onUpdate(Object.assign({},subject,{sheets:v}));}})
   );
 };
 
@@ -10686,6 +10824,7 @@ var MathView = function MathView(_ref_math) {
   var tabs = [
     {id:'dzialy', label:'Działy', emoji:'📚'},
     {id:'warmup', label:'Rozgrzewka', emoji:'🔥'},
+    {id:'sheets', label:'Arkusze', emoji:'📄'},
   ];
   return React.createElement('div', {className:'fade-in'},
     React.createElement('div', {style:{display:'flex',gap:8,marginBottom:20,borderBottom:'1px solid var(--border)',paddingBottom:0}},
@@ -10710,7 +10849,32 @@ var MathView = function MathView(_ref_math) {
         React.createElement('p', {style:{color:'var(--muted)',fontSize:14}}, 'Szybkie działania na czas. Rekordy zapisują się automatycznie dla każdej kategorii i poziomu trudności.')
       ),
       React.createElement(MathWarmup, null)
-    )
+    ),
+    mathTab==='sheets' && React.createElement(SheetsTab,{sheets:subject.sheets||[],color:'var(--math)',onUpdate:function(v){onUpdate(Object.assign({},subject,{sheets:v}));}})
+  );
+};
+
+// ─── GENERIC SUBJECT VIEW (z zakładką Arkusze) ───────────────────────────────
+var GenericSubjectView = function GenericSubjectView(_ref_gsv) {
+  var subject = _ref_gsv.subject, onUpdate = _ref_gsv.onUpdate, searchQuery = _ref_gsv.searchQuery;
+  var _gt = useState('dzialy'), gTab = _gt[0], setGTab = _gt[1];
+  var accentColor = subject.color || 'var(--eng)';
+  var gTabs = [{id:'dzialy',label:'Działy',emoji:'📚'},{id:'sheets',label:'Arkusze',emoji:'📄'}];
+  return React.createElement('div', {className:'fade-in'},
+    React.createElement('div', {style:{display:'flex',gap:0,marginBottom:20,borderBottom:'1px solid var(--border)',overflowX:'auto'}},
+      gTabs.map(function(t){
+        var a = gTab===t.id;
+        return React.createElement('button',{key:t.id,onClick:function(){setGTab(t.id);},style:{
+          padding:'10px 16px',border:'none',background:'none',cursor:'pointer',whiteSpace:'nowrap',
+          fontFamily:'Outfit,sans-serif',fontSize:13,fontWeight:a?600:400,
+          color:a?accentColor:'var(--muted)',
+          borderBottom:a?'2px solid '+accentColor:'2px solid transparent',
+          transition:'all .15s',marginBottom:-1
+        }},t.emoji+' '+t.label);
+      })
+    ),
+    gTab==='dzialy' && React.createElement(SubjectView,{subject:subject,onUpdate:onUpdate,searchQuery:searchQuery||''}),
+    gTab==='sheets' && React.createElement(SheetsTab,{sheets:subject.sheets||[],color:accentColor,onUpdate:function(v){onUpdate(Object.assign({},subject,{sheets:v}));}})
   );
 };
 
@@ -13454,7 +13618,7 @@ function App() {
         onUpdate: updateSubject
       })),
       view && !['dashboard','tracker','english','chat','diary','ai','math','polish'].includes(view) && state.subjects[view] &&
-        /*#__PURE__*/React.createElement(SubjectView, {
+        /*#__PURE__*/React.createElement(GenericSubjectView, {
           subject: state.subjects[view],
           onUpdate: updateSubject,
           searchQuery: ""
