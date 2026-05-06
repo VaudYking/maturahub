@@ -13300,21 +13300,6 @@ function App() {
       chatData: { math: [], polish: [], english: [] }
     };
   };
-
-  // Krótki ekran ładowania tylko na start — max 3s, potem apka działa bez względu na wynik
-  var _appReady = React.useState(false);
-  var appReady = _appReady[0], setAppReady = _appReady[1];
-
-  if (!appReady) {
-    return React.createElement('div', {style:{
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      height:'100vh', gap:12, fontFamily:'Outfit,sans-serif'
-    }},
-      React.createElement('div', {style:{fontSize:40}}, '📡'),
-      React.createElement('div', {style:{fontSize:16, fontWeight:700, fontFamily:'Syne,sans-serif', color:'var(--text)'}}, 'Ładowanie danych...'),
-      React.createElement('div', {style:{fontSize:12, color:'var(--muted)'}}, 'Synchronizacja z serwerem')
-    );
-  }
   var _useState121 = useState(function () {
       var s = initState();
       setTimeout(function () {
@@ -13355,11 +13340,7 @@ function App() {
   // Przy starcie: spróbuj załadować z Supabase (nowsze dane niż localStorage)
   useEffect(function () {
     setSyncStatusState('syncing');
-    // Max 3s timeout — potem apka działa z localStorage
-    var fallback = setTimeout(function() { setAppReady(true); }, 3000);
     loadFromSupabase().then(function (remoteData) {
-      clearTimeout(fallback);
-      setAppReady(true);
       if (!remoteData) {
         setSyncStatusState(navigator.onLine ? 'error' : 'offline');
         return;
