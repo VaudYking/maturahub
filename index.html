@@ -12626,20 +12626,50 @@ function saveDiary2Week(weekKey, data) {
   supabase.from('diary2_entries').upsert({ id: weekKey, data: data }).then(function() {});
 }
 
+var DIARY2_SETTINGS_KEY = 'diary2_settings_v1';
+function loadDiary2Settings() {
+  try { var s = localStorage.getItem(DIARY2_SETTINGS_KEY); if (s) return JSON.parse(s); } catch(e) {}
+  return { thresholdPct: 60 };
+}
+function saveDiary2Settings(s) {
+  try { localStorage.setItem(DIARY2_SETTINGS_KEY, JSON.stringify(s)); } catch(e) {}
+  supabase.from('diary2_cats').upsert({ id: 'global_settings', data: s }).then(function() {});
+}
+
 var DiaryView2 = function DiaryView2() {
   var _wo = React.useState(0), weekOffset = _wo[0], setWeekOffset = _wo[1];
   var weekStart = getWeekStart(weekOffset);
   var weekKey = getDiaryKey(weekStart);
 
+  // Edit mode toggle
+  var _em = React.useState(false); var editMode = _em[0], setEditMode = _em[1];
+
+  // Settings: threshold % (global, saved to supabase)
+  var _sett = React.useState(function() { return loadDiary2Settings(); });
+  var settings = _sett[0], setSettingsRaw = _sett[1];
+  var _showSett = React.useState(false); var showSettings = _showSett[0], setShowSettings = _showSett[1];
+  var _threshInput = React.useState(''); var threshInput = _threshInput[0], setThreshInput = _threshInput[1];
+
+  var saveSettings = function(newS) {
+    setSettingsRaw(newS);
+    saveDiary2Settings(newS);
+  };
+
   var _cats = React.useState(function() { return loadDiary2Cats(); });
   var cats = _cats[0], setCatsRaw = _cats[1];
 
-  // Wczytaj kategorie z Supabase przy starcie — Supabase jest źródłem prawdy
+  // Wczytaj kategorie i ustawienia z Supabase przy starcie
   React.useEffect(function() {
     supabase.from('diary2_cats').select('*').eq('id', 'global').single().then(function(res) {
       if (res.data && res.data.data) {
         setCatsRaw(res.data.data);
         saveDiary2Cats(res.data.data);
+      }
+    });
+    supabase.from('diary2_cats').select('*').eq('id', 'global_settings').single().then(function(res) {
+      if (res.data && res.data.data) {
+        setSettingsRaw(res.data.data);
+        try { localStorage.setItem(DIARY2_SETTINGS_KEY, JSON.stringify(res.data.data)); } catch(e) {}
       }
     });
   }, []);
@@ -12676,12 +12706,10 @@ var DiaryView2 = function DiaryView2() {
     saveDiary2Week(weekKey, data);
   };
 
-  // When a category is renamed, update all week data keys
   var renamecat = function(oldId, newLabel) {
     var newId = newLabel.trim().toUpperCase().slice(0,6) || oldId;
     var newCats = cats.map(function(c) { return c.id === oldId ? { id: newId, label: newLabel.trim() } : c; });
     saveCats(newCats);
-    // Rename key in weekData
     var nd = {};
     DIARY2_DAYS_FULL.forEach(function(d) {
       var scores = Object.assign({}, weekData[d].scores);
@@ -12698,7 +12726,6 @@ var DiaryView2 = function DiaryView2() {
     var id = label.toUpperCase().slice(0,6) + '_' + Date.now();
     var newCats = cats.concat([{ id: id, label: label }]);
     saveCats(newCats);
-    // Add key to weekData
     var nd = {};
     DIARY2_DAYS_FULL.forEach(function(d) {
       var scores = Object.assign({}, weekData[d].scores, _defineProperty({}, id, ''));
@@ -12734,6 +12761,10 @@ var DiaryView2 = function DiaryView2() {
     save(Object.assign({}, weekData, _defineProperty({}, day, Object.assign({}, weekData[day], { tasks: tasks }))));
   };
 
+  // Max points = cats.length * 10 (dynamic)
+  var maxPts = cats.length * 10;
+  var passPts = maxPts > 0 ? Math.round(maxPts * (settings.thresholdPct || 60) / 100) : 0;
+
   var getDayTotal = function(day) {
     return cats.reduce(function(s, c) { return s + (parseInt(weekData[day] && weekData[day].scores[c.id]) || 0); }, 0);
   };
@@ -12744,19 +12775,73 @@ var DiaryView2 = function DiaryView2() {
   var todayRaw = new Date().getDay();
   var todayIdx = todayRaw === 0 ? 6 : todayRaw - 1;
   var isCurrentWeek = weekOffset === 0;
-  var colW = 72, labelW = 120, sumW = 52;
+  var colW = 72, labelW = editMode ? 160 : 110, sumW = 52;
 
   return React.createElement('div', { className: 'fade-in', style: { paddingBottom: 40, marginTop: 48 } },
     // Header
-    React.createElement('div', { style: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 } },
-      React.createElement('div', null,
+    React.createElement('div', { style: { display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20, flexWrap:'wrap', gap:8 } },
+      React.createElement('div', { style:{display:'flex', alignItems:'center', gap:10} },
         React.createElement('h2', { style: { fontFamily:'Syne', fontSize:22, fontWeight:800, letterSpacing:'-0.02em' } }, '📓 Dziennik 2'),
-        React.createElement('div', { style: { fontSize:12, color:'var(--muted)', marginTop:2 } }, formatWeekLabel(weekStart))
+        // Edit mode toggle button
+        React.createElement('button', {
+          onClick: function() { setEditMode(function(e){ return !e; }); setEditingCat(null); },
+          title: editMode ? 'Zakończ edycję' : 'Edytuj kategorie',
+          style: {
+            background: editMode ? 'rgba(245,158,11,0.18)' : 'var(--surface2)',
+            border: '1px solid ' + (editMode ? 'rgba(245,158,11,0.5)' : 'var(--border)'),
+            borderRadius: 8,
+            color: editMode ? 'var(--gold)' : 'var(--muted)',
+            cursor: 'pointer',
+            fontSize: 16,
+            padding: '6px 10px',
+            lineHeight: 1,
+            minWidth: 40,
+            minHeight: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all .2s'
+          }
+        }, editMode ? '✏️' : '✏️'),
+        // Trash icon — only visible in edit mode
+        editMode && React.createElement('button', {
+          onClick: function() {
+            if (cats.length === 0) return;
+            if (confirm('Usunąć WSZYSTKIE kategorie? Tej operacji nie można cofnąć.')) {
+              saveCats([]);
+              var nd = {};
+              DIARY2_DAYS_FULL.forEach(function(d) { nd[d] = Object.assign({}, weekData[d], { scores: {} }); });
+              save(nd);
+            }
+          },
+          title: 'Usuń wszystkie kategorie',
+          style: {
+            background: 'rgba(239,68,68,0.12)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: 8,
+            color: 'var(--math)',
+            cursor: 'pointer',
+            fontSize: 16,
+            padding: '6px 10px',
+            lineHeight: 1,
+            minWidth: 40,
+            minHeight: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }
+        }, '🗑')
       ),
       React.createElement('div', { style: { display:'flex', gap:8, alignItems:'center' } },
         React.createElement('button', { className:'btn btn-ghost', style:{padding:'6px 14px',fontSize:12}, onClick:function(){ setWeekOffset(function(o){return o-1;}); } }, '← Poprzedni'),
         React.createElement('button', { className:'btn btn-ghost', style:{padding:'6px 14px',fontSize:12}, onClick:function(){ setWeekOffset(function(o){return o+1;}); } }, 'Następny →')
       )
+    ),
+    // Edit mode banner
+    editMode && React.createElement('div', {
+      style: { background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.3)', borderRadius:10, padding:'8px 14px', marginBottom:12, fontSize:12, color:'var(--gold)', display:'flex', alignItems:'center', gap:8 }
+    },
+      React.createElement('span', null, '✏️ Tryb edycji aktywny — możesz edytować i usuwać kategorie. Kliknij ikonę ołówka w nagłówku aby zakończyć.')
     ),
     // Table
     React.createElement('div', { style:{overflowX:'auto', borderRadius:14, border:'1px solid var(--border)'} },
@@ -12771,36 +12856,45 @@ var DiaryView2 = function DiaryView2() {
                 isToday && React.createElement('div', { style:{width:4,height:4,borderRadius:'50%',background:'var(--eng)',margin:'2px auto 0'} })
               );
             }),
-            React.createElement('th', { style:{width:sumW, padding:'10px 6px', textAlign:'center', fontFamily:'Syne', fontSize:11, color:'var(--eng)', borderBottom:'1px solid var(--border)', minWidth:sumW} }, '∑')
+            React.createElement('th', { style:{width:sumW, padding:'10px 6px', textAlign:'center', fontFamily:'Syne', fontSize:11, color:'var(--eng)', borderBottom:'1px solid var(--border)', minWidth:sumW} }, '\u2211')
           )
         ),
         React.createElement('tbody', null,
-          // Category rows
           cats.length === 0
-            ? React.createElement('tr', null, React.createElement('td', { colSpan:9, style:{textAlign:'center', padding:'24px', color:'var(--muted)', fontSize:12} }, 'Brak kategorii — dodaj pierwszą poniżej ↓'))
+            ? React.createElement('tr', null, React.createElement('td', { colSpan:9, style:{textAlign:'center', padding:'24px', color:'var(--muted)', fontSize:12} }, editMode ? 'Brak kategorii \u2014 dodaj poni\u017cej \u2193' : 'Brak kategorii \u2014 kliknij \u270F\uFE0F aby dodawa\u0107'))
             : cats.map(function(cat, ci) {
-              var catData = weekData && weekData[DIARY2_DAYS_FULL[0]] ? true : false;
               return React.createElement('tr', { key:cat.id, style:{borderBottom:'1px solid var(--border)', background:ci%2===0?'var(--surface)':'var(--surface2)'} },
-                // Editable label cell
                 React.createElement('td', { style:{padding:'6px 8px', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:ci%2===0?'var(--surface)':'var(--surface2)', minWidth:labelW} },
-                  editingCat === cat.id
+                  editMode && editingCat === cat.id
                     ? React.createElement('div', { style:{display:'flex', gap:4, alignItems:'center'} },
                         React.createElement('input', {
                           type:'text', value:editVal, autoFocus:true,
                           onChange:function(e){setEditVal(e.target.value);},
                           onKeyDown:function(e){ if(e.key==='Enter') renamecat(cat.id, editVal); if(e.key==='Escape') setEditingCat(null); },
-                          style:{fontSize:11, padding:'2px 4px', borderRadius:4, width:'80px', fontFamily:'Outfit'}
+                          style:{fontSize:11, padding:'4px 6px', borderRadius:6, width:'90px', fontFamily:'Outfit', border:'1px solid var(--eng)', background:'var(--surface3)', color:'var(--text)', outline:'none'}
                         }),
-                        React.createElement('button', { onClick:function(){renamecat(cat.id,editVal);}, style:{background:'var(--eng)',color:'#fff',border:'none',borderRadius:4,padding:'2px 6px',fontSize:10,cursor:'pointer'} }, '✓'),
-                        React.createElement('button', { onClick:function(){setEditingCat(null);}, style:{background:'transparent',color:'var(--muted)',border:'none',borderRadius:4,padding:'2px 4px',fontSize:10,cursor:'pointer'} }, '✕')
+                        React.createElement('button', { onClick:function(){renamecat(cat.id,editVal);}, style:{background:'var(--eng)',color:'#fff',border:'none',borderRadius:6,padding:'4px 8px',fontSize:11,cursor:'pointer',minWidth:28,minHeight:28} }, '\u2713'),
+                        React.createElement('button', { onClick:function(){setEditingCat(null);}, style:{background:'var(--surface3)',color:'var(--muted)',border:'1px solid var(--border)',borderRadius:6,padding:'4px 6px',fontSize:11,cursor:'pointer',minWidth:28,minHeight:28} }, '\u2715')
                       )
                     : React.createElement('div', { style:{display:'flex', alignItems:'center', gap:4} },
-                        React.createElement('span', { style:{fontFamily:'Syne', fontWeight:700, fontSize:12, color:'var(--text)', cursor:'pointer', flex:1}, onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); }, title:'Kliknij aby edytować' }, cat.label || cat.id),
-                        React.createElement('button', { onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); }, style:{background:'transparent', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:10, padding:'8px', borderRadius:3, opacity:0.6}, title:'Edytuj' }, '✏️'),
-                        React.createElement('button', { onClick:function(){ if(confirm('Usuń kategorię "'+cat.label+'"?')) removeCat(cat.id); }, style:{background:'transparent', border:'none', color:'var(--math)', cursor:'pointer', fontSize:10, padding:'8px', borderRadius:3, opacity:0.5}, title:'Usuń' }, '🗑')
+                        React.createElement('span', {
+                          style:{fontFamily:'Syne', fontWeight:700, fontSize:12, color:'var(--text)', flex:1,
+                                 cursor: editMode ? 'pointer' : 'default'},
+                          onClick: editMode ? function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); } : undefined,
+                          title: editMode ? 'Kliknij aby edytować' : undefined
+                        }, cat.label || cat.id),
+                        editMode && React.createElement('button', {
+                          onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); },
+                          style:{background:'transparent', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:13, padding:'8px', borderRadius:6, minWidth:32, minHeight:32, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1},
+                          title:'Edytuj'
+                        }, '\u270F\uFE0F'),
+                        editMode && React.createElement('button', {
+                          onClick:function(){ if(confirm('Usu\u0144 kategori\u0119 "'+cat.label+'"?')) removeCat(cat.id); },
+                          style:{background:'transparent', border:'none', color:'var(--math)', cursor:'pointer', fontSize:13, padding:'8px', borderRadius:6, minWidth:32, minHeight:32, display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1},
+                          title:'Usu\u0144'
+                        }, '\uD83D\uDDD1')
                       )
                 ),
-                // Score inputs
                 DIARY2_DAYS_FULL.map(function(d, i) {
                   var val = weekData[d] && weekData[d].scores ? weekData[d].scores[cat.id] : '';
                   var num = parseInt(val);
@@ -12817,45 +12911,41 @@ var DiaryView2 = function DiaryView2() {
                     })
                   );
                 }),
-                // Sum column
                 React.createElement('td', { style:{padding:'4px 6px', textAlign:'center'} },
-                  React.createElement('span', { style:{fontFamily:'JetBrains Mono', fontSize:12, color:'var(--muted)', fontWeight:600} }, getCatTotal(cat.id) || '—')
+                  React.createElement('span', { style:{fontFamily:'JetBrains Mono', fontSize:12, color:'var(--muted)', fontWeight:600} }, getCatTotal(cat.id) || '\u2014')
                 )
               );
             }),
-          // PKT row
           React.createElement('tr', { style:{background:'var(--surface3)', borderTop:'2px solid var(--border)'} },
             React.createElement('td', { style:{padding:'8px 8px', fontFamily:'Syne', fontWeight:800, fontSize:12, color:'var(--text)', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:'var(--surface3)'} }, 'PKT'),
             DIARY2_DAYS_FULL.map(function(d, i) {
               var total = getDayTotal(d);
               var hasAny = cats.some(function(c) { return weekData[d] && weekData[d].scores[c.id] !== '' && weekData[d].scores[c.id] !== undefined; });
-              var pass = total >= DIARY2_PASS;
+              var pass = total >= passPts;
               var isToday = isCurrentWeek && i === todayIdx;
               return React.createElement('td', { key:d, style:{padding:'8px 4px', textAlign:'center', borderRight:'1px solid var(--border)', background:isToday?'rgba(59,130,246,0.06)':undefined} },
                 hasAny
                   ? React.createElement('span', { style:{fontFamily:'JetBrains Mono', fontWeight:700, fontSize:13, color:pass?'var(--green)':'var(--math)', background:pass?'rgba(34,197,94,.12)':'rgba(239,68,68,.12)', padding:'3px 7px', borderRadius:6, border:'1px solid '+(pass?'rgba(34,197,94,.3)':'rgba(239,68,68,.3)')} }, total)
-                  : React.createElement('span', { style:{color:'var(--muted)', fontSize:11} }, '—')
+                  : React.createElement('span', { style:{color:'var(--muted)', fontSize:11} }, '\u2014')
               );
             }),
             React.createElement('td', { style:{padding:'8px 4px', textAlign:'center'} }, React.createElement('span', { style:{fontFamily:'JetBrains Mono', fontSize:11, color:'var(--muted)'} }, '/7'))
           ),
-          // +/- row
           React.createElement('tr', { style:{background:'var(--surface2)', borderBottom:'2px solid var(--border)'} },
-            React.createElement('td', { style:{padding:'5px 8px', fontFamily:'Syne', fontSize:10, color:'var(--muted)', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:'var(--surface2)'} }, '+/–'),
+            React.createElement('td', { style:{padding:'5px 8px', fontFamily:'Syne', fontSize:10, color:'var(--muted)', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:'var(--surface2)'} }, '+/\u2013'),
             DIARY2_DAYS_FULL.map(function(d, i) {
               var total = getDayTotal(d);
               var hasAny = cats.some(function(c) { return weekData[d] && weekData[d].scores[c.id] !== '' && weekData[d].scores[c.id] !== undefined; });
-              var pass = total >= DIARY2_PASS;
+              var pass = total >= passPts;
               var isToday = isCurrentWeek && i === todayIdx;
               return React.createElement('td', { key:d, style:{padding:'5px 4px', textAlign:'center', borderRight:'1px solid var(--border)', background:isToday?'rgba(59,130,246,0.06)':undefined} },
                 hasAny
-                  ? React.createElement('span', { style:{fontSize:13, color:pass?'var(--green)':'var(--math)', fontWeight:700} }, pass?'+':'−')
-                  : React.createElement('span', { style:{color:'var(--muted)', fontSize:11} }, '—')
+                  ? React.createElement('span', { style:{fontSize:13, color:pass?'var(--green)':'var(--math)', fontWeight:700} }, pass?'+':'\u2212')
+                  : React.createElement('span', { style:{color:'var(--muted)', fontSize:11} }, '\u2014')
               );
             }),
             React.createElement('td', null)
           ),
-          // Task rows
           [0,1,2,3].map(function(rowIdx) {
             return React.createElement('tr', { key:'task'+rowIdx, style:{background:rowIdx%2===0?'var(--surface)':'var(--surface2)', borderBottom:'1px solid var(--border)'} },
               React.createElement('td', { style:{padding:'4px 8px', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:rowIdx%2===0?'var(--surface)':'var(--surface2)'} }),
@@ -12877,29 +12967,58 @@ var DiaryView2 = function DiaryView2() {
         )
       )
     ),
-    // Add category row
-    React.createElement('div', { style:{marginTop:14, display:'flex', gap:8, alignItems:'center'} },
+    // Add category row — only in edit mode
+    editMode && React.createElement('div', { style:{marginTop:14, display:'flex', gap:8, alignItems:'center', flexWrap:'wrap'} },
       React.createElement('input', {
-        type:'text', value:newCat, placeholder:'Nazwa nowej kategorii…',
+        type:'text', value:newCat, placeholder:'Nazwa nowej kategorii\u2026',
         onChange:function(e){setNewCat(e.target.value);},
         onKeyDown:function(e){ if(e.key==='Enter') addCat(); },
         style:{maxWidth:220, fontSize:13}
       }),
-      React.createElement('button', { className:'btn btn-primary', style:{fontSize:12, padding:'8px 14px'}, onClick:addCat }, '+ Dodaj kategorię')
+      React.createElement('button', { className:'btn btn-primary', style:{fontSize:12, padding:'8px 14px'}, onClick:addCat }, '+ Dodaj kategori\u0119')
     ),
-    // Legend
-    React.createElement('div', { style:{display:'flex', gap:16, marginTop:14, flexWrap:'wrap'} },
-      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
-        React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--green)',display:'inline-block'} }),
-        '≥ 70 pkt — dzień udany'
+    // Legend + settings
+    React.createElement('div', { style:{marginTop:14} },
+      React.createElement('div', { style:{display:'flex', gap:16, flexWrap:'wrap', alignItems:'center'} },
+        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
+          React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--green)',display:'inline-block'} }),
+          '\u2265 ' + passPts + ' pkt \u2014 dzie\u0144 udany'
+        ),
+        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
+          React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--math)',display:'inline-block'} }),
+          '< ' + passPts + ' pkt \u2014 nieudany'
+        ),
+        React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
+          React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--gold)',display:'inline-block'} }),
+          'Max: ' + maxPts + ' pkt (' + cats.length + ' kat. \xD7 10)'
+        ),
+        React.createElement('button', {
+          onClick:function(){ setShowSettings(function(s){return !s;}); setThreshInput(String(settings.thresholdPct||60)); },
+          style:{fontSize:11, color:'var(--muted)', background:'none', border:'1px solid var(--border)', borderRadius:7, padding:'3px 10px', cursor:'pointer', fontFamily:'Outfit,sans-serif', marginLeft:'auto'}
+        }, '\u2699\uFE0F Pr\xF3g dnia')
       ),
-      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
-        React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--math)',display:'inline-block'} }),
-        '< 70 pkt — nieudany'
-      ),
-      React.createElement('div', { style:{display:'flex',alignItems:'center',gap:6,fontSize:11,color:'var(--muted)'} },
-        React.createElement('span', { style:{width:8,height:8,borderRadius:'50%',background:'var(--gold)',display:'inline-block'} }),
-        'Kliknij etykietę kategorii aby edytować'
+      // Settings panel — hidden by default, small, unobtrusive
+      showSettings && React.createElement('div', {
+        style:{marginTop:10, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:10, padding:'12px 14px', display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', maxWidth:360}
+      },
+        React.createElement('span', { style:{fontSize:12, color:'var(--muted)'} }, 'Pr\xF3g dnia udanego:'),
+        React.createElement('input', {
+          type:'number', min:1, max:100, value:threshInput,
+          onChange:function(e){setThreshInput(e.target.value);},
+          onKeyDown:function(e){ if(e.key==='Enter'){
+            var v=parseInt(threshInput);
+            if(!isNaN(v)&&v>0&&v<=100){saveSettings({thresholdPct:v});setShowSettings(false);}
+          }},
+          style:{width:60, fontSize:13, padding:'4px 8px', borderRadius:7, border:'1px solid var(--border)', background:'var(--surface3)', color:'var(--text)', textAlign:'center', fontFamily:'JetBrains Mono'}
+        }),
+        React.createElement('span', { style:{fontSize:12, color:'var(--muted)'} }, '% z max (' + maxPts + ' pkt = pr\xF3g ' + Math.round(maxPts*(parseInt(threshInput)||60)/100) + ' pkt)'),
+        React.createElement('button', {
+          onClick:function(){
+            var v=parseInt(threshInput);
+            if(!isNaN(v)&&v>0&&v<=100){saveSettings({thresholdPct:v});setShowSettings(false);}
+          },
+          style:{background:'var(--eng)',color:'#fff',border:'none',borderRadius:7,padding:'5px 14px',fontSize:12,cursor:'pointer',fontFamily:'Outfit,sans-serif',fontWeight:600}
+        }, 'Zapisz')
       )
     )
   );
