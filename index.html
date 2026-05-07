@@ -12623,7 +12623,7 @@ function loadDiary2Week(weekKey, cats) {
 }
 function saveDiary2Week(weekKey, data) {
   try { localStorage.setItem(getDiary2DataKey(weekKey), JSON.stringify(data)); } catch(e) {}
-  // TODO (drugi kąt): supabase.from('diary2_entries').upsert({ id: weekKey, data: data })
+  supabase.from('diary2_entries').upsert({ id: weekKey, data: data }).then(function() {});
 }
 
 var DiaryView2 = function DiaryView2() {
@@ -12634,12 +12634,30 @@ var DiaryView2 = function DiaryView2() {
   var _cats = React.useState(function() { return loadDiary2Cats(); });
   var cats = _cats[0], setCatsRaw = _cats[1];
 
+  // Wczytaj kategorie z Supabase przy starcie — Supabase jest źródłem prawdy
+  React.useEffect(function() {
+    supabase.from('diary2_cats').select('*').eq('id', 'global').single().then(function(res) {
+      if (res.data && res.data.data) {
+        setCatsRaw(res.data.data);
+        saveDiary2Cats(res.data.data);
+      }
+    });
+  }, []);
+
   var _wd = React.useState(function() { return loadDiary2Week(weekKey, cats); });
   var weekData = _wd[0], setWeekData = _wd[1];
 
   // Reload week when weekOffset changes
   React.useEffect(function() {
-    setWeekData(loadDiary2Week(weekKey, cats));
+    var local = loadDiary2Week(weekKey, cats);
+    setWeekData(local);
+    supabase.from('diary2_entries').select('*').eq('id', weekKey).single().then(function(res) {
+      if (res.data && res.data.data) {
+        var remote = res.data.data;
+        setWeekData(remote);
+        try { localStorage.setItem(getDiary2DataKey(weekKey), JSON.stringify(remote)); } catch(e) {}
+      }
+    });
   }, [weekOffset]);
 
   // Editing state for category labels
@@ -12650,6 +12668,7 @@ var DiaryView2 = function DiaryView2() {
   var saveCats = function(newCats) {
     setCatsRaw(newCats);
     saveDiary2Cats(newCats);
+    supabase.from('diary2_cats').upsert({ id: 'global', data: newCats }).then(function() {});
   };
 
   var save = function(data) {
@@ -12777,8 +12796,8 @@ var DiaryView2 = function DiaryView2() {
                       )
                     : React.createElement('div', { style:{display:'flex', alignItems:'center', gap:4} },
                         React.createElement('span', { style:{fontFamily:'Syne', fontWeight:700, fontSize:12, color:'var(--text)', cursor:'pointer', flex:1}, onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); }, title:'Kliknij aby edytować' }, cat.label || cat.id),
-                        React.createElement('button', { onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); }, style:{background:'transparent', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:10, padding:'1px 3px', borderRadius:3, opacity:0.6}, title:'Edytuj' }, '✏️'),
-                        React.createElement('button', { onClick:function(){ if(confirm('Usuń kategorię "'+cat.label+'"?')) removeCat(cat.id); }, style:{background:'transparent', border:'none', color:'var(--math)', cursor:'pointer', fontSize:10, padding:'1px 3px', borderRadius:3, opacity:0.5}, title:'Usuń' }, '🗑')
+                        React.createElement('button', { onClick:function(){ setEditingCat(cat.id); setEditVal(cat.label||cat.id); }, style:{background:'transparent', border:'none', color:'var(--muted)', cursor:'pointer', fontSize:10, padding:'8px', borderRadius:3, opacity:0.6}, title:'Edytuj' }, '✏️'),
+                        React.createElement('button', { onClick:function(){ if(confirm('Usuń kategorię "'+cat.label+'"?')) removeCat(cat.id); }, style:{background:'transparent', border:'none', color:'var(--math)', cursor:'pointer', fontSize:10, padding:'8px', borderRadius:3, opacity:0.5}, title:'Usuń' }, '🗑')
                       )
                 ),
                 // Score inputs
