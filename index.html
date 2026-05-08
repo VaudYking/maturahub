@@ -12863,8 +12863,8 @@ var DiaryView2 = function DiaryView2() {
           cats.length === 0
             ? React.createElement('tr', null, React.createElement('td', { colSpan:9, style:{textAlign:'center', padding:'24px', color:'var(--muted)', fontSize:12} }, editMode ? 'Brak kategorii \u2014 dodaj poni\u017cej \u2193' : 'Brak kategorii \u2014 kliknij \u270F\uFE0F aby dodawa\u0107'))
             : cats.map(function(cat, ci) {
-              return React.createElement('tr', { key:cat.id, style:{borderBottom:'1px solid var(--border)', background:ci%2===0?'var(--surface)':'var(--surface2)'} },
-                React.createElement('td', { style:{padding:'6px 8px', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:ci%2===0?'var(--surface)':'var(--surface2)', minWidth:labelW} },
+              return React.createElement('tr', { key:cat.id, style:{borderBottom:'1px solid var(--border)', background:ci<5?'rgba(59,130,246,0.03)':ci<10?'rgba(239,68,68,0.03)':'rgba(168,85,247,0.03)'} },
+                React.createElement('td', { style:{padding:'6px 8px', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:_gb, borderLeft:'3px solid '+_gc, minWidth:labelW} },
                   editMode && editingCat === cat.id
                     ? React.createElement('div', { style:{display:'flex', gap:4, alignItems:'center'} },
                         React.createElement('input', {
