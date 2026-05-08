@@ -7728,9 +7728,13 @@ function srsInit(wordId) {
   return { ef: 2.5, interval: 1, reps: 0, due: Date.now(), totalReviews: 0, correct: 0, streak: 0 };
 }
 function srsUpdate(card, rating) {
-  // rating: 0=znowu, 1=trudne, 2=dobre, 3=łatwe (SM2-inspired)
+  // rating: 0=nie umiem, 1=uczę się, 2=uczę się (alias), 3=umiem
   var c = Object.assign({}, card);
   c.totalReviews = (c.totalReviews || 0) + 1;
+  // Jawny status wybierany przez użytkownika
+  if (rating === 0) c.userStatus = 'red';
+  else if (rating === 1 || rating === 2) c.userStatus = 'orange';
+  else c.userStatus = 'green';
   if (rating >= 2) {
     c.correct = (c.correct || 0) + 1;
     c.streak = (c.streak || 0) + 1;
@@ -7751,6 +7755,8 @@ function srsUpdate(card, rating) {
 }
 function srsGetStatus(card) {
   if (!card || card.totalReviews === 0) return 'new';
+  // Użyj jawnego statusu wybranego przez użytkownika
+  if (card.userStatus) return card.userStatus;
   var pct = card.totalReviews > 0 ? (card.correct||0)/card.totalReviews : 0;
   if (pct >= 0.8 && card.reps >= 3) return 'green';
   if (pct >= 0.5 || card.reps >= 1) return 'orange';
@@ -8179,7 +8185,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     var c = srsRef.current[w.id];
     var st = srsGetStatus(c);
     var stColor = st==='green'?'#22c55e':st==='orange'?'#f97316':st==='red'?'#ef4444':'#6b7280';
-    var stLabel = st==='new'?'Nowe':st==='green'?'Umiem':st==='orange'?'Uczę się':'Nie umiem';
+    var stLabel = st==='new'?'Nowe':st==='green'?'✓ Umiem':st==='orange'?'Uczę się':'✗ Nie umiem';
     return React.createElement('div',null,
       // Header
       React.createElement('div',{style:{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}},
@@ -8215,7 +8221,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
       // Ocena / Odkryj
       flipped ? React.createElement('div',null,
         React.createElement('div',{style:{fontSize:11,color:'var(--muted)',textAlign:'center',marginBottom:8}},'Jak Ci poszło?'),
-        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:8}},
+        React.createElement('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}},
           [{r:0,label:'Znowu',sub:'nie wiedziałem',c:'#ef4444'},{r:1,label:'Trudne',sub:'z błędem',c:'#f97316'},{r:2,label:'Dobre',sub:'z wahaniem',c:'#3b82f6'},{r:3,label:'Łatwe',sub:'od razu',c:'#22c55e'}].map(function(btn) {
             return React.createElement('button',{key:btn.r,onClick:function(){rateCard(btn.r);},style:{
               background:btn.c+'22',border:'1px solid '+btn.c+'55',borderRadius:10,padding:'10px 6px',
@@ -8305,8 +8311,8 @@ var EngFlashcards = function EngFlashcards(_ref21) {
 
   // ── RESULT ──
   if (phase==='result') {
-    var ratingLabels = ['Znowu','Trudne','Dobre','Łatwe'];
-    var ratingColors = ['#ef4444','#f97316','#3b82f6','#22c55e'];
+    var ratingLabels = ['Nie umiem','Uczę się','Uczę się','Umiem'];
+    var ratingColors = ['#ef4444','#f97316','#f97316','#22c55e'];
     var correctR = sessionResults.filter(function(r){return r.rating>=2;}).length;
     var pctR = sessionResults.length ? Math.round(correctR/sessionResults.length*100) : 0;
     var skipped = deck.length - sessionResults.length;
