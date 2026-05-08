@@ -7841,16 +7841,17 @@ var EngFlashcards = function EngFlashcards(_ref21) {
 
   // ── Stats (zawsze z aktualnego srsRef) ──
   var stats = React.useMemo(function() {
-    var total = allWords.length, newC=0, learning=0, known=0, due=0;
+    var total = allWords.length, newC=0, learning=0, known=0, due=0, red=0;
     allWords.forEach(function(w) {
       var c = srsRef.current[w.id];
       var st = srsGetStatus(c);
       if (st==='new') newC++;
       else if (st==='orange') learning++;
-      else known++;
+      else if (st==='green') known++;
+      else red++;
       if (srsDue(c)) due++;
     });
-    return {total, 'new':newC, learning, known, due};
+    return {total, 'new':newC, learning, known, due, red};
   }, [allWords, srsData]); // srsData jako dependency żeby przeliczać po każdej ocenie
 
   // ── Build deck ──
@@ -7945,7 +7946,7 @@ var EngFlashcards = function EngFlashcards(_ref21) {
     var availableCount = getFilteredPool().length; // bez limitu!
     var statCards = [
       {label:'Wszystkie',val:stats.total,color:'var(--eng)'},
-      {label:'Nie umiem',val:stats['new']+((stats.due)||0),color:'#ef4444'},
+      {label:'Nie umiem',val:stats.red||0,color:'#ef4444'},
       {label:'Uczę się',val:stats.learning,color:'#f97316'},
       {label:'Umiem',val:stats.known,color:'#22c55e'},
     ];
@@ -7984,12 +7985,13 @@ var EngFlashcards = function EngFlashcards(_ref21) {
               else if (st==='red') statsSec.red.push(w);
               else statsSec.new.push(w);
             });
-            var nieum = statsSec.red.length + statsSec.new.length;
+            var nieum = statsSec.red.length;
             var isExpanded = expandedSec === sec.id;
             var activeFilter = expandedSec === sec.id ? expandedSecFilter : null;
 
             var filteredWords = !activeFilter ? [] :
-              activeFilter === 'red' ? statsSec.red.concat(statsSec.new) :
+              activeFilter === 'red' ? statsSec.red :
+              activeFilter === 'new' ? statsSec.new :
               activeFilter === 'orange' ? statsSec.orange :
               statsSec.green;
 
@@ -8006,22 +8008,25 @@ var EngFlashcards = function EngFlashcards(_ref21) {
                 React.createElement('div',{style:{height:6,background:'var(--surface3)',borderRadius:3,overflow:'hidden',display:'flex'}},
                   React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.green.length/secWords.length*100):0)+'%',background:'#22c55e',transition:'width .4s'}}),
                   React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.orange.length/secWords.length*100):0)+'%',background:'#f97316',transition:'width .4s'}}),
-                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round((statsSec.red.length+statsSec.new.length)/secWords.length*100):0)+'%',background:'#ef4444',transition:'width .4s'}})
+                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.red.length/secWords.length*100):0)+'%',background:'#ef4444',transition:'width .4s'}}),
+                  React.createElement('div',{style:{height:'100%',width:(secWords.length?Math.round(statsSec.new.length/secWords.length*100):0)+'%',background:'#4b5563',transition:'width .4s'}})
                 ),
                 React.createElement('div',{style:{display:'flex',gap:10,marginTop:5,fontSize:11}},
                   React.createElement('span',{style:{color:'#22c55e',cursor:'pointer',fontWeight: activeFilter==='green'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='green'?null:'green');}},
                     '🟢 '+statsSec.green.length+' umie'),
                   React.createElement('span',{style:{color:'#f97316',cursor:'pointer',fontWeight: activeFilter==='orange'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='orange'?null:'orange');}},
                     '🟠 '+statsSec.orange.length+' uczy się'),
-                  React.createElement('span',{style:{color:'#ef4444',cursor:'pointer',fontWeight: activeFilter==='red'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='red'?null:'red');}},
-                    '🔴 '+nieum+' nie umie')
+                  statsSec.red.length > 0 && React.createElement('span',{style:{color:'#ef4444',cursor:'pointer',fontWeight: activeFilter==='red'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='red'?null:'red');}},
+                    '🔴 '+statsSec.red.length+' nie umie'),
+                  statsSec.new.length > 0 && React.createElement('span',{style:{color:'#6b7280',cursor:'pointer',fontWeight: activeFilter==='new'?700:400},onClick:function(e){e.stopPropagation();setExpandedSec(sec.id);setExpandedSecFilter(activeFilter==='new'?null:'new');}},
+                    '⬜ '+statsSec.new.length+' nieznane')
                 )
               ),
               // Expanded word list
               isExpanded && React.createElement('div',{style:{borderTop:'1px solid var(--border)',padding:'6px 0'}},
                 // Filter pills inside expanded panel
                 React.createElement('div',{style:{display:'flex',gap:6,padding:'6px 14px 8px'}},
-                  [{id:null,label:'Wszystkie'},{id:'green',label:'🟢 Umiem'},{id:'orange',label:'🟠 Uczę się'},{id:'red',label:'🔴 Nie umiem'}].map(function(f){
+                  [{id:null,label:'Wszystkie'},{id:'green',label:'🟢 Umiem'},{id:'orange',label:'🟠 Uczę się'},{id:'red',label:'🔴 Nie umiem'},{id:'new',label:'⬜ Nieznane'}].map(function(f){
                     var a = expandedSecFilter===f.id;
                     return React.createElement('button',{key:String(f.id),onClick:function(){setExpandedSecFilter(f.id);},style:{
                       padding:'3px 10px',borderRadius:20,border:'1px solid '+(a?'var(--eng)':'var(--border)'),
@@ -8031,12 +8036,13 @@ var EngFlashcards = function EngFlashcards(_ref21) {
                   })
                 ),
                 (expandedSecFilter===null ? secWords :
-                  expandedSecFilter==='red' ? statsSec.red.concat(statsSec.new) :
+                  expandedSecFilter==='red' ? statsSec.red :
+                  expandedSecFilter==='new' ? statsSec.new :
                   expandedSecFilter==='orange' ? statsSec.orange :
                   statsSec.green
                 ).map(function(w){
                   var st = srsGetStatus(srsRef.current[w.id]);
-                  var dot = st==='green'?'#22c55e':st==='orange'?'#f97316':'#ef4444';
+                  var dot = st==='green'?'#22c55e':st==='orange'?'#f97316':st==='red'?'#ef4444':'#4b5563';
                   return React.createElement('div',{key:w.id,style:{
                     display:'flex',alignItems:'center',gap:8,padding:'5px 14px',
                     fontSize:12,borderBottom:'1px solid var(--border)',
