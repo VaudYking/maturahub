@@ -13520,8 +13520,8 @@ var BackupModal = function BackupModal(_ref31) {
   ))))), document.body);
 };
 // ─── AI VIEW ──────────────────────────────────────────────────────────────────
-var GROK_API_KEY = localStorage.getItem('grok_api_key') || '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';
-var GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
+var GROK_API_KEY = localStorage.getItem('grok_api_key') || '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';
+var GROK_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 var AIView = function AIView(_ref_ai) {
   var subjects = _ref_ai.subjects;
@@ -13589,7 +13589,7 @@ var AIView = function AIView(_ref_ai) {
         'Authorization': 'Bearer ' + GROK_API_KEY
       },
       body: JSON.stringify({
-        model: 'grok-3-mini',
+        model: 'llama-3.3-70b-versatile',
         messages: grokMessages,
         max_tokens: 1200,
         temperature: 0.7
