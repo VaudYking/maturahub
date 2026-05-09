@@ -12925,7 +12925,7 @@ var DiaryView2 = function DiaryView2() {
                       onBlur:function(e){e.target.style.borderColor='transparent';e.target.style.background='transparent';},
 'data-cat':ci,
 'data-day':i,
-tabIndex: i * cats.length + ci + 1,
+tabIndex: 2000 + i * cats.length + ci,
 onKeyDown:function(e){if(e.key==='Enter'){e.preventDefault();var nextCat=ci+1;var nextDay=i;var next=document.querySelector('#diary2-table input[data-cat="'+nextCat+'"][data-day="'+nextDay+'"]');if(next){next.focus();next.select();}}}
                     })
                   );
