@@ -1862,7 +1862,7 @@ function prepareForStorage(data) {
   // Czyści imageDesc i email z base64 > 50KB (zastępuje pustym stringiem — zdjęcie jest w Storage)
   var stripEngItem = function stripEngItem(item) {
     if (item && item.img && item.img.startsWith && item.img.startsWith('data:image') && item.img.length > 50000) {
-      return _objectSpread(_objectSpread({}, item), {}, { img: '[zdjęcie w chmurze]' });
+      return _objectSpread(_objectSpread({}, item), {}, { img: null });
     }
     return item;
   };
@@ -7156,6 +7156,7 @@ var EngTenses = function EngTenses(_ref18) {
 };
 
 /* ---------- OPIS OBRAZKA ---------- */
+var isValidImg = function isValidImg(v) { return v && (v.startsWith('http') || v.startsWith('data:image')); };
 var EngImageDesc = function EngImageDesc(_ref19) {
   var data = _ref19.data,
     onChange = _ref19.onChange;
@@ -7345,14 +7346,14 @@ var EngImageDesc = function EngImageDesc(_ref19) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      cursor: cur.img ? 'default' : 'pointer',
+      cursor: isValidImg(cur.img) ? 'default' : 'pointer',
       overflow: 'hidden',
       background: 'var(--surface2)'
     },
     onClick: function onClick() {
-      if (!cur.img) fileRef.current.click();
+      if (!isValidImg(cur.img)) fileRef.current.click();
     }
-  }, cur.img ? /*#__PURE__*/React.createElement("img", {
+  }, isValidImg(cur.img) ? /*#__PURE__*/React.createElement("img", {
     src: cur.img,
     alt: "zadanie",
     style: {
@@ -7379,7 +7380,7 @@ var EngImageDesc = function EngImageDesc(_ref19) {
     style: {
       fontSize: 13
     }
-  }, "Kliknij aby wybra\u0107 plik lub wklej Ctrl+V"))), cur.img && /*#__PURE__*/React.createElement("div", {
+  }, "Kliknij aby wybra\u0107 plik lub wklej Ctrl+V"))), isValidImg(cur.img) && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 6,
@@ -7624,14 +7625,14 @@ var EngEmail = function EngEmail(_ref20) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      cursor: cur.img ? 'default' : 'pointer',
+      cursor: isValidImg(cur.img) ? 'default' : 'pointer',
       overflow: 'hidden',
       background: 'var(--surface2)'
     },
     onClick: function onClick() {
-      if (!cur.img) fileRef.current.click();
+      if (!isValidImg(cur.img)) fileRef.current.click();
     }
-  }, cur.img ? /*#__PURE__*/React.createElement("img", {
+  }, isValidImg(cur.img) ? /*#__PURE__*/React.createElement("img", {
     src: cur.img,
     alt: "zadanie",
     style: {
@@ -7658,7 +7659,7 @@ var EngEmail = function EngEmail(_ref20) {
     style: {
       fontSize: 13
     }
-  }, "Kliknij aby wybra\u0107 plik lub wklej Ctrl+V"))), cur.img && /*#__PURE__*/React.createElement("div", {
+  }, "Kliknij aby wybra\u0107 plik lub wklej Ctrl+V"))), isValidImg(cur.img) && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       gap: 6,
@@ -13853,8 +13854,10 @@ function App() {
             var newWordSections = initialWords.filter(function(s){ return remoteWordIds.indexOf(s.id) === -1; });
             if (newWordSections.length > 0 || remoteWords.length === 0) {
               mergedSubjects.english = _objectSpread(_objectSpread({}, remoteEng), {}, {
-                engData: _objectSpread(_objectSpread({ sentences:[], tenses:[], imageDesc:[], email:[], quiz:[], idioms:[] }, remoteEngData), {}, {
-                  words: remoteWords.concat(newWordSections)
+                engData: _objectSpread(_objectSpread({ sentences:[], tenses:[], quiz:[], idioms:[] }, remoteEngData), {}, {
+                  words: remoteWords.concat(newWordSections),
+                  imageDesc: remoteEngData.imageDesc || [],
+                  email: remoteEngData.email || []
                 })
               });
             }
