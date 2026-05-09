@@ -12857,7 +12857,7 @@ var DiaryView2 = function DiaryView2() {
     ),
     // Table
     React.createElement('div', { style:{overflowX:'auto', borderRadius:14, border:'1px solid var(--border)'} },
-      React.createElement('table', { style:{borderCollapse:'collapse', width:'100%', background:'var(--surface)', fontSize:12} },
+      React.createElement('table', { id:'diary2-table', style:{borderCollapse:'collapse', width:'100%', background:'var(--surface)', fontSize:12} },
         React.createElement('thead', null,
           React.createElement('tr', { style:{background:'var(--surface2)'} },
             React.createElement('th', { style:{width:labelW, padding:'10px 8px', textAlign:'left', fontFamily:'Syne', fontSize:11, color:'var(--muted)', borderBottom:'1px solid var(--border)', borderRight:'1px solid var(--border)', position:'sticky', left:0, background:'var(--surface2)'} }, 'KATEGORIA'),
@@ -12921,7 +12921,10 @@ var DiaryView2 = function DiaryView2() {
                       onChange:function(e){setScore(d,cat.id,e.target.value);},
                       style:{width:'100%', background:'transparent', border:'1px solid transparent', borderRadius:5, color:color, fontSize:13, padding:'3px 2px', textAlign:'center', fontFamily:'JetBrains Mono', fontWeight:700, transition:'all .15s', MozAppearance:'textfield'},
                       onFocus:function(e){e.target.style.borderColor='var(--border)';e.target.style.background='var(--surface3)';},
-                      onBlur:function(e){e.target.style.borderColor='transparent';e.target.style.background='transparent';}
+                      onBlur:function(e){e.target.style.borderColor='transparent';e.target.style.background='transparent';},
+'data-cat':ci,
+'data-day':i,
+onKeyDown:function(e){if(e.key==='Enter'){e.preventDefault();var nextCat=ci+1;var nextDay=i;var next=document.querySelector('#diary2-table input[data-cat="'+nextCat+'"][data-day="'+nextDay+'"]');if(next){next.focus();next.select();}}}
                     })
                   );
                 }),
