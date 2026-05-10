@@ -13873,13 +13873,12 @@ function App() {
           // Zapisz tylko lokalnie — nie odsyłaj z powrotem do Supabase (dane stamtąd przyszły)
           try { var _prep = prepareForStorage(merged); localStorage.setItem(LS_KEY, JSON.stringify(_prep)); } catch(e) {}
           streakReadyRef.current = true;
+          maybeAutoBackup(merged);
           return merged;
         }
         return prev;
       });
       setSyncStatusState('synced');
-      // Auto-backup raz dziennie
-      setState(function(cur) { maybeAutoBackup(cur); return cur; });
     });
   }, []);
 
@@ -13946,7 +13945,7 @@ function App() {
         // diffDays === 1: kolejny dzień → kontynuuj streak
         // diffDays === 0: ten sam dzień (nie powinno tu dotrzeć) → bez zmian
         // diffDays > 1: przerwa → reset, ALE daj 1 dzień tolerancji na błędy strefy czasowej
-        var newStreak = diffDays === 1 ? prevS.tracker.streak + 1 : (diffDays === 0 ? prevS.tracker.streak : 1);
+        var newStreak = diffDays <= 1 ? (diffDays === 1 ? prevS.tracker.streak + 1 : prevS.tracker.streak) : (diffDays === 2 ? prevS.tracker.streak : 1);
         var prev = prevS.tracker.weekHistory || [0, 0, 0, 0, 0, 0, 0];
         var shift = Math.min(diffDays, 7);
         var newWeekHistory = [].concat(_toConsumableArray(prev.slice(shift)), _toConsumableArray(Array(shift).fill(0)));
