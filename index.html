@@ -13570,11 +13570,11 @@ var BackupModal = function BackupModal(_ref31) {
   ))))), document.body);
 };
 // ─── AI VIEW ──────────────────────────────────────────────────────────────────
-var GROK_API_KEY = localStorage.getItem('grok_api_key') || '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';
+var GROK_API_KEY = localStorage.getItem('grok_api_key') || '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';
 var GROK_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
 var AIView = function AIView(_ref_ai) {
-  var subjects = _ref_ai.subjects;
+  var subjects = _ref_ai.subjects, tracker = _ref_ai.tracker || {}, chatData = _ref_ai.chatData || {};
   var _ai1 = React.useState([]), messages = _ai1[0], setMessages = _ai1[1];
   var _ai2 = React.useState(''), input = _ai2[0], setInput = _ai2[1];
   var _ai3 = React.useState(false), loading = _ai3[0], setLoading = _ai3[1];
@@ -13588,33 +13588,77 @@ var AIView = function AIView(_ref_ai) {
 
   function getProgress() {
     var result = { math: 0, polish: 0, english: 0, mathDone: [], mathLeft: [], polDone: [], polLeft: [], engDone: [], engLeft: [] };
-    if (subjects && subjects.math && subjects.math.sections.length) {
+    if (subjects && subjects.math && subjects.math.sections && subjects.math.sections.length) {
       var done = subjects.math.sections.filter(function(s){return s.completed;});
       var left = subjects.math.sections.filter(function(s){return !s.completed;});
       result.math = Math.round(done.length / subjects.math.sections.length * 100);
       result.mathDone = done.map(function(s){return s.name;});
       result.mathLeft = left.map(function(s){return s.name;});
+      result.mathSections = subjects.math.sections.map(function(s){
+        return s.name + (s.completed ? ' [ZROBIONE]' : ' [DO ZROBIENIA]') + (s.notes ? ' | notatki: ' + s.notes.substring(0,150) : '');
+      });
     }
-    if (subjects && subjects.polish && subjects.polish.sections.length) {
+    if (subjects && subjects.polish && subjects.polish.sections && subjects.polish.sections.length) {
       var done2 = subjects.polish.sections.filter(function(s){return s.completed;});
       var left2 = subjects.polish.sections.filter(function(s){return !s.completed;});
       result.polish = Math.round(done2.length / subjects.polish.sections.length * 100);
       result.polDone = done2.map(function(s){return s.name;});
       result.polLeft = left2.map(function(s){return s.name;});
+      result.polSections = subjects.polish.sections.map(function(s){
+        return s.name + (s.completed ? ' [ZROBIONE]' : ' [DO ZROBIENIA]') + (s.notes ? ' | notatki: ' + s.notes.substring(0,150) : '');
+      });
     }
-    if (subjects && subjects.english && subjects.english.sections.length) {
+    if (subjects && subjects.english && subjects.english.sections && subjects.english.sections.length) {
       var done3 = subjects.english.sections.filter(function(s){return s.completed;});
       var left3 = subjects.english.sections.filter(function(s){return !s.completed;});
       result.english = Math.round(done3.length / subjects.english.sections.length * 100);
       result.engDone = done3.map(function(s){return s.name;});
       result.engLeft = left3.map(function(s){return s.name;});
     }
+    var engData = (subjects && subjects.english && subjects.english.engData) || {};
+    result.words = (engData.words || []).map(function(sec){
+      var total = (sec.words||[]).length;
+      var green = (sec.words||[]).filter(function(w){return w.status==='green';}).length;
+      var orange = (sec.words||[]).filter(function(w){return w.status==='orange';}).length;
+      var red = (sec.words||[]).filter(function(w){return w.status==='red';}).length;
+      return sec.name + ': umiem ' + green + '/' + total + ', ucze sie ' + orange + ', nie umiem ' + red;
+    });
+    result.tenses = (engData.tenses || []).map(function(t){
+      return t.label + (t.notes ? ': ' + t.notes.substring(0,200) : ': brak notatek');
+    });
+    result.emailCount = (engData.email || []).length;
+    result.imgDescCount = (engData.imageDesc || []).length;
+    result.streak = tracker.streak || 0;
+    result.totalDays = tracker.totalDays || 0;
+    result.todayMinutes = tracker.todayMinutes || 0;
     return result;
   }
 
   function buildSystemPrompt() {
     var p = getProgress();
-    return "Jestes osobistym asystentem naukowym ucznia przygotowujacego sie do matury 2027 na poziomie podstawowym z matematyki, jezyka polskiego i angielskiego. Uczen zaczyna od absolutnych podstaw z matematyki (nie zna ulamkow). Odpowiadaj ZAWSZE po polsku. Badz konkretny, przyjazny i motywujacy. Uzywaj prostego jezyka. Dawaj konkretne przyklady i wyjasnienia krok po kroku.\n\nAKTUALNY POSTEP UCZNIA:\n- Matematyka: " + p.math + "% (" + (p.mathDone.length ? 'przerobione: ' + p.mathDone.join(', ') : 'nic jeszcze') + "; zostalo: " + (p.mathLeft.slice(0,3).join(', ') || 'wszystko przerobione') + (p.mathLeft.length > 3 ? ' i inne' : '') + ")\n- Polski: " + p.polish + "% (" + (p.polDone.length ? 'przerobione: ' + p.polDone.join(', ') : 'nic jeszcze') + "; zostalo: " + (p.polLeft.slice(0,3).join(', ') || 'wszystko przerobione') + (p.polLeft.length > 3 ? ' i inne' : '') + ")\n- Angielski: " + p.english + "% (" + (p.engDone.length ? 'przerobione: ' + p.engDone.join(', ') : 'nic jeszcze') + "; zostalo: " + (p.engLeft.slice(0,3).join(', ') || 'wszystko przerobione') + (p.engLeft.length > 3 ? ' i inne' : '') + ")\n\nUzywaj tych danych gdy uczen pyta o postep, priorytety lub co robic dalej.";
+    var daysLeft = Math.round((new Date('2027-05-05') - new Date()) / (1000*60*60*24));
+    var lines = [];
+    lines.push('Jestes osobistym asystentem naukowym Dawida przygotowujacego sie do matury 2027 (podstawowy) z mat, pol, ang. Dawid zaczyna od podstaw matmy. Odpowiadaj PO POLSKU, konkretnie i motywujaco.');
+    lines.push('Do matury: ' + daysLeft + ' dni (' + Math.round(daysLeft/7) + ' tygodni). Matura maj 2027.');
+    lines.push('');
+    lines.push('=== AKTYWNOSC ===');
+    lines.push('Streak: ' + p.streak + ' dni | Lacznie: ' + p.totalDays + ' dni nauki | Dzis: ' + p.todayMinutes + ' min');
+    lines.push('');
+    lines.push('=== MATEMATYKA (' + p.math + '% done) ===');
+    (p.mathSections||[]).forEach(function(s){ lines.push('  '+s); });
+    lines.push('');
+    lines.push('=== POLSKI (' + p.polish + '% done) ===');
+    (p.polSections||[]).forEach(function(s){ lines.push('  '+s); });
+    lines.push('');
+    lines.push('=== ANGIELSKI (' + p.english + '% done) ===');
+    lines.push('- Slowka:');
+    (p.words||[]).forEach(function(w){ lines.push('  '+w); });
+    lines.push('- Czasy:');
+    if (p.tenses && p.tenses.length) { p.tenses.forEach(function(t){ lines.push('  '+t); }); } else { lines.push('  brak notatek'); }
+    lines.push('- Zadania email: ' + p.emailCount + ' | Opisy obrazkow: ' + p.imgDescCount);
+    lines.push('');
+    lines.push('Gdy Dawid pyta o postep, notatki lub co robic dalej - uzyj tych danych. Gdy pyta o temat - wyjasnij szczegolowo z przykladami.');
+    return lines.join('\n');
   }
 
   function sendMessage(textOverride) {
@@ -14090,7 +14134,7 @@ function App() {
         onUpdate: updateChatData
       })),
       /*#__PURE__*/React.createElement('div', {style: hide('diary')}, /*#__PURE__*/React.createElement(DiaryView, null), /*#__PURE__*/React.createElement(DiaryView2, null)),
-      /*#__PURE__*/React.createElement('div', {style: hide('ai')}, /*#__PURE__*/React.createElement(AIView, { subjects: state.subjects })),
+      /*#__PURE__*/React.createElement('div', {style: hide('ai')}, /*#__PURE__*/React.createElement(AIView, { subjects: state.subjects, tracker: state.tracker, chatData: state.chatData })),
       /*#__PURE__*/React.createElement('div', {style: hide('math')}, state.subjects.math && /*#__PURE__*/React.createElement(MathView, {
         subject: state.subjects.math,
         onUpdate: updateSubject
