@@ -1606,6 +1606,8 @@ function _flushSyncToSupabase() {
           _isSyncing = true;
           data = _pendingState;
           _pendingState = null;
+          _imageUploadFailed = false;
+          _uploadedImageMap = {};
           _context.p = 2;
           _context.n = 3;
           return uploadChatImagesToStorage(data.chatData);
@@ -1615,6 +1617,15 @@ function _flushSyncToSupabase() {
           return uploadEngDataImagesToStorage(data.subjects);
         case 4:
           cleanSubjects = _context.v;
+          if (!(cleanSubjects && cleanSubjects.polish)) {
+            _context.n = 45;
+            break;
+          }
+          _context.n = 45;
+          return uploadPolDataChatImagesToStorage(cleanSubjects.polish).then(function(cleanedPolish){
+            cleanSubjects = Object.assign({}, cleanSubjects, { polish: cleanedPolish });
+          });
+        case 45:
           _context.n = 5;
           return supabase.from('app_state').upsert({
             id: 'main',
@@ -1627,8 +1638,12 @@ function _flushSyncToSupabase() {
           if (upsertResult && upsertResult.error) {
             console.warn('Supabase upsert error:', upsertResult.error);
             setSyncStatus('error');
+          } else if (_imageUploadFailed) {
+            console.warn('[MaturaHub] Zapis do bazy OK, ale co najmniej jeden obrazek nie wgrał się do Storage — sprawdź konsolę.');
+            setSyncStatus('error');
           } else {
             setSyncStatus('synced');
+            notifyCleanedState(_uploadedImageMap);
           }
           _context.n = 7;
           break;
@@ -1687,6 +1702,50 @@ function _loadFromSupabase() {
   }));
   return _loadFromSupabase.apply(this, arguments);
 }
+// Flaga: czy w bieżącym cyklu synchronizacji jakiś upload obrazka się nie powiódł.
+// Dzięki temu UI może pokazać "błąd sync" zamiast cicho zostawiać base64 w bazie.
+var _imageUploadFailed = false;
+// Mapa base64 -> URL dla obrazków wgranych w BIEŻĄCYM cyklu synchronizacji.
+// Potrzebne, żeby po udanym uploadzie podmienić base64 na URL także w LOKALNYM
+// stanie apki (bez tego base64 zostawało w pamięci/localStorage na zawsze,
+// mimo że w Storage i tak już był sam URL — patrz notifyCleanedState niżej).
+var _uploadedImageMap = {};
+
+// Callback zarejestrowany przez komponent App — pozwala podmienić w żywym stanie
+// Reacta wszystkie base64, które właśnie zostały wgrane do Storage, na ich URL-e.
+var _cleanedStateCallback = null;
+function registerCleanedStateCallback(cb) { _cleanedStateCallback = cb; }
+function notifyCleanedState(map) {
+  if (_cleanedStateCallback && map && Object.keys(map).length) _cleanedStateCallback(map);
+}
+// Rekurencyjnie podmienia w dowolnej strukturze każdy string będący kluczem w `map`
+// na odpowiadającą mu wartość. Zachowuje referencje dla niezmienionych gałęzi.
+function swapKnownImages(value, map) {
+  if (typeof value === 'string') {
+    return Object.prototype.hasOwnProperty.call(map, value) ? map[value] : value;
+  }
+  if (Array.isArray(value)) {
+    var changed = false;
+    var newArr = value.map(function (v) {
+      var nv = swapKnownImages(v, map);
+      if (nv !== v) changed = true;
+      return nv;
+    });
+    return changed ? newArr : value;
+  }
+  if (value && typeof value === 'object') {
+    var changedObj = false;
+    var newObj = {};
+    Object.keys(value).forEach(function (k) {
+      var nv = swapKnownImages(value[k], map);
+      if (nv !== value[k]) changedObj = true;
+      newObj[k] = nv;
+    });
+    return changedObj ? newObj : value;
+  }
+  return value;
+}
+
 // Helper: upload single base64 image to Supabase Storage, return public URL or original
 async function uploadSingleImageToStorage(base64DataUrl, folder, id) {
   if (!base64DataUrl || !base64DataUrl.startsWith('data:image')) return base64DataUrl;
@@ -1699,9 +1758,15 @@ async function uploadSingleImageToStorage(base64DataUrl, folder, id) {
     var _up = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, blob, { upsert: true, contentType: blob.type });
     if (_up.data) {
       var _url = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+      _uploadedImageMap[base64DataUrl] = _url.data.publicUrl;
       return _url.data.publicUrl;
     }
-  } catch(e) { /* keep original on error */ }
+    console.warn('[MaturaHub] Upload obrazka nieudany (brak data w odpowiedzi):', fileName, _up.error);
+    _imageUploadFailed = true;
+  } catch(e) {
+    console.warn('[MaturaHub] Upload obrazka nieudany (wyjątek):', folder, id, e);
+    _imageUploadFailed = true;
+  }
   return base64DataUrl;
 }
 
@@ -1792,6 +1857,56 @@ async function uploadEngDataImagesToStorage(subjects) {
     })
   });
 }
+// Upload obrazków z czatów w polData (lektury/motywy/zadania/rozprawka — zakładka Polski)
+async function uploadPolDataChatImagesToStorage(polishSubject) {
+  if (!polishSubject || !polishSubject.polData) return polishSubject;
+  var pd = polishSubject.polData;
+
+  async function sweepList(list, folder) {
+    if (!Array.isArray(list) || !list.length) return list;
+    return Promise.all(list.map(async function(item) {
+      if (!item || !item.chat || !item.chat.length) return item;
+      var hasBase64 = item.chat.some(function(m) {
+        return m.src && m.src.startsWith && m.src.startsWith('data:image');
+      });
+      if (!hasBase64) return item;
+      var newChat = await Promise.all(item.chat.map(async function(m) {
+        if (!m.src || !m.src.startsWith || !m.src.startsWith('data:image')) return m;
+        var url = await uploadSingleImageToStorage(m.src, folder + '/' + (item.id || 'x'), m.id || ('pc_' + Date.now()));
+        return Object.assign({}, m, { src: url });
+      }));
+      return Object.assign({}, item, { chat: newChat });
+    }));
+  }
+
+  var newLektury = await sweepList(pd.lektury, 'polish/lektury');
+  var newMotywy = await sweepList(pd.motywy, 'polish/motywy');
+  var newZadania = await sweepList(pd.zadania, 'polish/zadania');
+
+  var newRozprawka = pd.rozprawka;
+  if (pd.rozprawka && pd.rozprawka.chat && pd.rozprawka.chat.length) {
+    var hasB64 = pd.rozprawka.chat.some(function(m) {
+      return m.src && m.src.startsWith && m.src.startsWith('data:image');
+    });
+    if (hasB64) {
+      var newChat2 = await Promise.all(pd.rozprawka.chat.map(async function(m) {
+        if (!m.src || !m.src.startsWith || !m.src.startsWith('data:image')) return m;
+        var url = await uploadSingleImageToStorage(m.src, 'polish/rozprawka', m.id || ('pc_' + Date.now()));
+        return Object.assign({}, m, { src: url });
+      }));
+      newRozprawka = Object.assign({}, pd.rozprawka, { chat: newChat2 });
+    }
+  }
+
+  return Object.assign({}, polishSubject, {
+    polData: Object.assign({}, pd, {
+      lektury: newLektury || pd.lektury,
+      motywy: newMotywy || pd.motywy,
+      zadania: newZadania || pd.zadania,
+      rozprawka: newRozprawka
+    })
+  });
+}
 function dataUrlToBlob(dataUrl) {
   var _dataUrl$split = dataUrl.split(','),
     _dataUrl$split2 = _slicedToArray(_dataUrl$split, 2),
@@ -1866,6 +1981,12 @@ function prepareForStorage(data) {
     }
     return item;
   };
+  var stripListChat = function stripListChat(list) {
+    return (list || []).map(function (item) {
+      if (!item || !item.chat) return item;
+      return _objectSpread(_objectSpread({}, item), {}, { chat: strip(item.chat) });
+    });
+  };
   var cleanedSubjects = Object.fromEntries(Object.entries(data.subjects || {}).map(function (_ref) {
     var _ref2 = _slicedToArray(_ref, 2),
       k = _ref2[0],
@@ -1884,7 +2005,16 @@ function prepareForStorage(data) {
       engData: subj.engData ? _objectSpread(_objectSpread({}, subj.engData), {}, {
         imageDesc: (subj.engData.imageDesc || []).map(stripEngItem),
         email: (subj.engData.email || []).map(stripEngItem)
-      }) : subj.engData
+      }) : subj.engData,
+      // Czyść polData.{lektury,motywy,zadania,rozprawka}.chat jeśli to polish
+      polData: subj.polData ? _objectSpread(_objectSpread({}, subj.polData), {}, {
+        lektury: stripListChat(subj.polData.lektury),
+        motywy: stripListChat(subj.polData.motywy),
+        zadania: stripListChat(subj.polData.zadania),
+        rozprawka: subj.polData.rozprawka ? _objectSpread(_objectSpread({}, subj.polData.rozprawka), {}, {
+          chat: strip(subj.polData.rozprawka.chat)
+        }) : subj.polData.rozprawka
+      }) : subj.polData
     })];
   }));
   return _objectSpread(_objectSpread({}, data), {}, {
@@ -9767,9 +9897,9 @@ var PolChat = function PolChat(_ref_pc) {
 };
 
 // ─── POLISH STORAGE ───────────────────────────────────────────────────────────
-var POL_STORAGE_KEY = 'polishData_v2';
-function polLoad() { try { return JSON.parse(localStorage.getItem(POL_STORAGE_KEY)||'{}'); } catch(e) { return {}; } }
-function polSave(d) { try { localStorage.setItem(POL_STORAGE_KEY, JSON.stringify(d)); } catch(e) {} }
+// UWAGA: polData jest teraz częścią subject.polData i idzie przez normalną
+// synchronizację Supabase (patrz PolishView). Poniższe INITIAL_* to tylko
+// wartości domyślne używane przy pierwszym uruchomieniu / braku danych.
 
 var INITIAL_LEKTURY = [
   {id:'l_antygona',tytul:'Antygona',autor:'Sofokles',epoka:'Antyk',gatunek:'Tragedia',opis:'Konflikt między prawem boskim a ludzkim. Antygona chce pochować brata Polinejkesa wbrew zakazowi Kreona.',bohaterowie:'Antygona, Kreon, Hajmon, Ismena, Tyrezjasz',motywy:'bunt, prawo, śmierć, obowiązek, tragizm',teza:'Antyk ukazuje nierozwiązywalny konflikt między jednostką a państwem.',done:false,chat:[]},
@@ -9843,9 +9973,9 @@ var INITIAL_ROZPRAWKA = {
 var PolishView = function PolishView(_ref_pol) {
   var subject = _ref_pol.subject, onUpdate = _ref_pol.onUpdate;
   var _pt = useState('dzialy'), polTab = _pt[0], setPolTab = _pt[1];
-  var _pd = useState(function(){ return polLoad(); }), polData = _pd[0], setPolData = _pd[1];
+  var polData = subject.polData || {};
 
-  function savePolData(d){ setPolData(d); polSave(d); }
+  function savePolData(d){ onUpdate(Object.assign({}, subject, { polData: d })); }
   function mergeList(key, init){ return polData[key] || init; }
 
   var lektury = mergeList('lektury', INITIAL_LEKTURY);
@@ -10617,250 +10747,6 @@ var MathWarmup = function MathWarmup() {
   }
 
   return null;
-};
-
-// ─── MATH VIEW (z zakładkami) ─────────────────────────────────────────────────
-
-// ─── POLISH VIEW ──────────────────────────────────────────────────────────────
-
-var POL_STORAGE_KEY = 'polishData_v1';
-function polLoad() { try { return JSON.parse(localStorage.getItem(POL_STORAGE_KEY)||'{}'); } catch(e) { return {}; } }
-function polSave(d) { try { localStorage.setItem(POL_STORAGE_KEY, JSON.stringify(d)); } catch(e) {} }
-
-var INITIAL_LEKTURY = [
-  { id:'l_antygona', tytul:'Antygona', autor:'Sofokles', epoka:'Antyk', gatunek:'Tragedia',
-    opis:'Konflikt między prawem boskim a ludzkim. Antygona chce pochować brata Polinejkesa wbrew zakazowi Kreona.',
-    bohaterowie:'Antygona, Kreon, Hajmon, Ismena, Tyrezjasz',
-    motywy:'bunt, prawo, śmierć, obowiązek, tragizm',
-    teza:'Antyk ukazuje nierozwiązywalny konflikt między jednostką a państwem.',
-    done:false
-  },
-  { id:'l_biblia', tytul:'Biblia (fragmenty)', autor:'–', epoka:'Antyk/Średniowiecze', gatunek:'Księga święta',
-    opis:'Stary i Nowy Testament – Księga Hioba, Psalmy, Apokalipsa, Pieśń nad Pieśniami.',
-    bohaterowie:'Hiob, Dawid, Jan Ewangelista',
-    motywy:'cierpienie, wiara, apokalipsa, miłość, nadzieja',
-    teza:'Biblia wyznacza wzorce etyczne i kulturowe cywilizacji zachodniej.',
-    done:false
-  },
-  { id:'l_makbet', tytul:'Makbet', autor:'William Szekspir', epoka:'Renesans', gatunek:'Tragedia',
-    opis:'Historia szkockiego wodza, który po przepowiedni wiedźm morduje króla i sam sięga po władzę.',
-    bohaterowie:'Makbet, Lady Makbet, Dunkan, Macduff, Banquo',
-    motywy:'władza, zbrodnia, wina, ambicja, przepowiednia, szaleństwo',
-    teza:'Makbet pokazuje, jak żądza władzy prowadzi do moralnego upadku.',
-    done:false
-  },
-  { id:'l_skapiec', tytul:'Skąpiec', autor:'Molier', epoka:'Klasycyzm', gatunek:'Komedia',
-    opis:'Harpagon – skąpiec, którego obsesja na punkcie pieniędzy niszczy relacje z dziećmi.',
-    bohaterowie:'Harpagon, Kleant, Eliza, Walery, Mariana',
-    motywy:'skąpstwo, komizm, miłość vs pieniądze, rodzina',
-    teza:'Komedia demaskuje ludzkie wady przez satyrę i śmiech.',
-    done:false
-  },
-  { id:'l_dziady2', tytul:'Dziady cz. II', autor:'Adam Mickiewicz', epoka:'Romantyzm', gatunek:'Dramat romantyczny',
-    opis:'Obrzęd przywoływania duchów – każdy duch opowiada o swoich przewinach. Morał: żyć tak, by nie żałować.',
-    bohaterowie:'Guślarz, Widmo Złego Pana, Zosia, Dziecięta',
-    motywy:'duchy, obrzęd, wina, kara, pamięć, śmierć',
-    teza:'Romantycy wierzyli w łączność żywych i umarłych.',
-    done:false
-  },
-  { id:'l_dziady3', tytul:'Dziady cz. III', autor:'Adam Mickiewicz', epoka:'Romantyzm', gatunek:'Dramat romantyczny',
-    opis:'Martyrologia narodu polskiego pod zaborem rosyjskim. Konrad buntuje się przeciw Bogu.',
-    bohaterowie:'Konrad, ksiądz Piotr, Ewa, senator Nowosilcow',
-    motywy:'wolność, mesjanizm, cierpienie narodu, bunt, Wielka Improwizacja',
-    teza:'Polska jako Chrystus narodów – mesjanizm romantyczny.',
-    done:false
-  },
-  { id:'l_pan_tadeusz', tytul:'Pan Tadeusz', autor:'Adam Mickiewicz', epoka:'Romantyzm', gatunek:'Epopeja narodowa',
-    opis:'Obraz szlachty litewskiej na tle napoleońskim. Miłość Tadeusza i Zosi, spory Sopliców z Horeszkami.',
-    bohaterowie:'Tadeusz, Zosia, Jacek Soplica/ks. Robak, Gerwazy, Hrabia',
-    motywy:'ojczyzna, miłość, natura, tradycja, zemsta, odkupienie',
-    teza:'Pan Tadeusz to hołd złożony utraconej ojczyźnie i szlacheckiej tradycji.',
-    done:false
-  },
-  { id:'l_lalka', tytul:'Lalka', autor:'Bolesław Prus', epoka:'Pozytywizm', gatunek:'Powieść realistyczna',
-    opis:'Stanisław Wokulski – kupiec zakochany w arystokratce Izabeli Łęckiej. Panorama społeczeństwa XIX w.',
-    bohaterowie:'Wokulski, Rzecki, Izabela Łęcka, Ochocki, Tomasz Łęcki',
-    motywy:'miłość, klasy społeczne, idealizm, rozczarowanie, praca, nauka',
-    teza:'Pozytywizm ukazuje konflikt między idealizmem a pragmatyzmem społecznym.',
-    done:false
-  },
-  { id:'l_wesele', tytul:'Wesele', autor:'Stanisław Wyspiański', epoka:'Młoda Polska', gatunek:'Dramat symboliczny',
-    opis:'Wesele chłopki i inteligenta w Bronowicach. Chocholi taniec jako symbol marazmu Polaków.',
-    bohaterowie:'Pan Młody, Panna Młoda, Chochoł, Wernyhora, Dziennikarz, Poeta',
-    motywy:'chochoł, złoty róg, marazm, inteligencja vs lud, mit niepodległości',
-    teza:'Wesele krytykuje niemoc polskiej inteligencji i niespełnione marzenia o wolności.',
-    done:false
-  },
-  { id:'l_zbrodnia', tytul:'Zbrodnia i kara', autor:'Fiodor Dostojewski', epoka:'Realizm', gatunek:'Powieść psychologiczna',
-    opis:'Raskolnikow zabija lichwiarzkę, przekonany o własnej wyjątkowości. Psychologiczne skutki zbrodni.',
-    bohaterowie:'Raskolnikow, Sonia, Dunya, Porfiry, Marmeładow',
-    motywy:'zbrodnia, kara, wina, nadczłowiek, cierpienie, odkupienie',
-    teza:'Żadna idea nie może usprawiedliwić zbrodni – prawo moralne jest nieuchronne.',
-    done:false
-  },
-  { id:'l_przedwiosnie', tytul:'Przedwiośnie', autor:'Stefan Żeromski', epoka:'Dwudziestolecie', gatunek:'Powieść',
-    opis:'Cezary Baryka szuka swojego miejsca w odrodzonej Polsce. Trzy wizje jej urządzenia.',
-    bohaterowie:'Cezary Baryka, Seweryn Baryka, Szymon Gajowiec, Lulusia',
-    motywy:'szklane domy, rewolucja, rozczarowanie, Polska, tożsamość',
-    teza:'Żeromski krytykuje zarówno utopijny idealizm, jak i rewolucję jako remedium na problemy Polski.',
-    done:false
-  },
-  { id:'l_process', tytul:'Proces', autor:'Franz Kafka', epoka:'Dwudziestolecie', gatunek:'Powieść',
-    opis:'Józef K. zostaje oskarżony, nie wiedząc o co. Absurd biurokratyczny i alienacja jednostki.',
-    bohaterowie:'Józef K., prokurator, ksiądz, malarze, adwokat',
-    motywy:'absurd, wina, alienacja, biurokracja, władza, bezradność',
-    teza:'Nowoczesne systemy władzy redukują człowieka do trybu w machinie – bez prawa do obrony.',
-    done:false
-  },
-  { id:'l_dzuma', tytul:'Dżuma', autor:'Albert Camus', epoka:'Współczesność', gatunek:'Powieść',
-    opis:'Epidemia dżumy w Oranie – metafora zła, nazizmu i absurdu. Doktor Rieux walczy mimo beznadziei.',
-    bohaterowie:'doktor Rieux, Tarrou, Rambert, Cottard, Paneloux',
-    motywy:'absurd, solidarność, bunt, śmierć, zło, heroizm bez nagrody',
-    teza:'Wobec absurdu istnienia jedyną odpowiedzią jest bunt i solidarność z innymi.',
-    done:false
-  },
-  { id:'l_inny_swiat', tytul:'Inny świat', autor:'Gustaw Herling-Grudziński', epoka:'Współczesność', gatunek:'Reportaż/proza dokumentalna',
-    opis:'Autobiograficzny opis pobytu autora w sowieckim łagrze. Dehumanizacja i walka o godność.',
-    bohaterowie:'narrator (Grudziński), Kostylew, Jewgienija, Natalia Lwowna',
-    motywy:'łagier, godność, dehumanizacja, wolność, przetrwanie, zło systemu',
-    teza:'Totalitaryzm niszczy człowieczeństwo – świadectwo jest moralnym obowiązkiem ocalałego.',
-    done:false
-  },
-  { id:'l_zdazyc', tytul:'Zdążyć przed Panem Bogiem', autor:'Hanna Krall', epoka:'Współczesność', gatunek:'Reportaż',
-    opis:'Rozmowa z Markiem Edelmanem – ostatnim dowódcą powstania w getcie warszawskim.',
-    bohaterowie:'Marek Edelman, narrator (Krall)',
-    motywy:'Holokaust, bunt, wybór, śmierć, pamięć, godność',
-    teza:'Powstanie w getcie było wyborem godnej śmierci, nie wiary w zwycięstwo.',
-    done:false
-  },
-  { id:'l_kamienie', tytul:'Kamienie na szaniec', autor:'Aleksander Kamiński', epoka:'Współczesność', gatunek:'Powieść dokumentalna',
-    opis:'Historia Alka, Rudego i Zośki – harcerzy Szarych Szeregów walczących w podziemiu.',
-    bohaterowie:'Alek Dawidowski, Jan Bytnar (Rudy), Tadeusz Zawadzki (Zośka)',
-    motywy:'patriotyzm, przyjaźń, poświęcenie, młodość, konspiracja, heroizm',
-    teza:'Młodzi ludzie potrafią poświęcić życie za wartości – przyjaźń i ojczyznę.',
-    done:false
-  },
-  { id:'l_ferdydurke', tytul:'Ferdydurke', autor:'Witold Gombrowicz', epoka:'Dwudziestolecie', gatunek:'Powieść',
-    opis:'Jonek zostaje przez prof. Pimkę „upupiony" – cofnięty do stanu ucznia. Groteska i forma.',
-    bohaterowie:'Józio (Jonek), profesor Pimko, Miętus, Młodziakowie, Hurleccy',
-    motywy:'forma, gęba, pupa, niedojrzałość, groteska, konformizm, bunt',
-    teza:'Człowiek jest więźniem formy – ról i masek narzucanych przez społeczeństwo.',
-    done:false
-  },
-];
-
-var INITIAL_MOTYWY = [
-  { id:'mot_mlosc', nazwa:'Miłość', kolor:'#ec4899',
-    opis:'Jeden z najważniejszych motywów literatury. Od miłości romantycznej, przez niespełnioną, po destrukcyjną.',
-    przyklady:[
-      {dzielo:'Pan Tadeusz', autor:'Mickiewicz', omowienie:'Miłość Tadeusza i Zosi – czysta, sielankowa, symbolizująca powrót do korzeni.'},
-      {dzielo:'Lalka', autor:'Prus', omowienie:'Obsesyjna miłość Wokulskiego do Izabeli Łęckiej – prowadzi do klęski idealisty.'},
-      {dzielo:'Romeo i Julia', autor:'Szekspir', omowienie:'Miłość silniejsza niż nienawiść rodów – kończy się tragicznie.'},
-    ]
-  },
-  { id:'mot_smierc', nazwa:'Śmierć', kolor:'#6b7280',
-    opis:'Śmierć jako granica, próba, kara lub wyzwolenie. Różnie interpretowana w zależności od epoki.',
-    przyklady:[
-      {dzielo:'Antygona', autor:'Sofokles', omowienie:'Śmierć jako konsekwencja wierności zasadom – Antygona wybiera prawo boskie.'},
-      {dzielo:'Makbet', autor:'Szekspir', omowienie:'Śmierć jako skutek zbrodni i przekleństwa ambicji.'},
-      {dzielo:'Dżuma', autor:'Camus', omowienie:'Śmierć masowa jako symbol absurdu i niesprawiedliwości.'},
-    ]
-  },
-  { id:'mot_wolnosc', nazwa:'Wolność i bunt', kolor:'#f97316',
-    opis:'Walka o wolność – narodową, jednostkową, egzystencjalną. Bunt jako postawa wobec niesprawiedliwości.',
-    przyklady:[
-      {dzielo:'Dziady cz. III', autor:'Mickiewicz', omowienie:'Wielka Improwizacja – bunt Konrada przeciw Bogu w imię wolności narodu.'},
-      {dzielo:'Dżuma', autor:'Camus', omowienie:'Bunt wobec absurdu – Rieux walczy mimo braku nadziei na zwycięstwo.'},
-      {dzielo:'Inny świat', autor:'Herling-Grudziński', omowienie:'Wolność jako cel w warunkach totalnej zniewoli łagru.'},
-    ]
-  },
-  { id:'mot_wina', nazwa:'Wina i kara', kolor:'#8b5cf6',
-    opis:'Zbrodnia i jej konsekwencje moralne, psychologiczne i społeczne.',
-    przyklady:[
-      {dzielo:'Zbrodnia i kara', autor:'Dostojewski', omowienie:'Raskolnikow morduje i nie może uciec przed wyrzutami sumienia – kara wewnętrzna.'},
-      {dzielo:'Makbet', autor:'Szekspir', omowienie:'Zbrodnia królobójstwa prowadzi do paranoi i zagłady.'},
-      {dzielo:'Dziady cz. II', autor:'Mickiewicz', omowienie:'Duchy odpokutowują winy ziemskie – niespełniona miłość, okrucieństwo.'},
-    ]
-  },
-  { id:'mot_ojczyzna', nazwa:'Ojczyzna i patriotyzm', kolor:'#ef4444',
-    opis:'Polska w literaturze – od tęsknoty za utraconym krajem po krytykę społeczną.',
-    przyklady:[
-      {dzielo:'Pan Tadeusz', autor:'Mickiewicz', omowienie:'Litwa jako utracony raj – tęsknota emigranta i hołd dla tradycji.'},
-      {dzielo:'Wesele', autor:'Wyspiański', omowienie:'Krytyka polskiej inteligencji niezdolnej do walki o wolność.'},
-      {dzielo:'Kamienie na szaniec', autor:'Kamiński', omowienie:'Patriotyzm młodych – poświęcenie życia za ojczyznę.'},
-    ]
-  },
-  { id:'mot_czlowiek_historia', nazwa:'Człowiek wobec historii', kolor:'#0ea5e9',
-    opis:'Jednostka uwikłana w wielkie wydarzenia historyczne – wojny, totalitaryzm, rewolucja.',
-    przyklady:[
-      {dzielo:'Przedwiośnie', autor:'Żeromski', omowienie:'Cezary Baryka szuka się między rewolucją a ideałem odrodzonej Polski.'},
-      {dzielo:'Zdążyć przed Panem Bogiem', autor:'Krall', omowienie:'Edelman jako świadek Holokaustu – obowiązek pamięci.'},
-      {dzielo:'Inny świat', autor:'Herling-Grudziński', omowienie:'Totalitaryzm sowiecki i jego wpływ na człowieczeństwo.'},
-    ]
-  },
-  { id:'mot_absurd', nazwa:'Absurd i egzystencjalizm', kolor:'#14b8a6',
-    opis:'Człowiek wobec bezsensu istnienia. Bunt jako jedyna odpowiedź na absurd.',
-    przyklady:[
-      {dzielo:'Dżuma', autor:'Camus', omowienie:'Absurd śmierci i choroby – Rieux buntuje się, działając mimo beznadziei.'},
-      {dzielo:'Proces', autor:'Kafka', omowienie:'Józef K. skazany bez wyroku – absurd systemu biurokratycznego.'},
-      {dzielo:'Ferdydurke', autor:'Gombrowicz', omowienie:'Groteska i absurd jako narzędzie obnażenia form społecznych.'},
-    ]
-  },
-  { id:'mot_dojrzewanie', nazwa:'Dojrzewanie i tożsamość', kolor:'#22c55e',
-    opis:'Przejście z młodości w dorosłość, poszukiwanie własnego ja, wybory moralne.',
-    przyklady:[
-      {dzielo:'Ferdydurke', autor:'Gombrowicz', omowienie:'Pimko cofa Józia do dzieciństwa – groteska jako krytyka infantylizacji.'},
-      {dzielo:'Przedwiośnie', autor:'Żeromski', omowienie:'Cezary szuka tożsamości między mitem szklanych domów a brutalną rzeczywistością.'},
-      {dzielo:'Kamienie na szaniec', autor:'Kamiński', omowienie:'Młodzi harcerze dojrzewają przez wybór poświęcenia się ojczyźnie.'},
-    ]
-  },
-];
-
-var INITIAL_ZADANIA = [
-  {id:'zad1', typ:'Analiza wiersza', tresc:'Zanalizuj i zinterpretuj wiersz „Tren IX" Jana Kochanowskiego. Omów środki stylistyczne i główny temat.', done:false, notatki:''},
-  {id:'zad2', typ:'Rozprawka', tresc:'Napisz rozprawkę na temat: „Czy bunt jest konieczny do zachowania godności?" Odwołaj się do co najmniej dwóch lektur.', done:false, notatki:''},
-  {id:'zad3', typ:'Charakterystyka', tresc:'Scharakteryzuj Wokulskiego z „Lalki" Prusa. Omów jego dążenia, konflikty wewnętrzne i związek z epoką.', done:false, notatki:''},
-  {id:'zad4', typ:'Porównanie', tresc:'Porównaj obraz cierpienia w „Dżumie" Camusa i „Innym świecie" Herlinga-Grudzińskiego.', done:false, notatki:''},
-  {id:'zad5', typ:'Motyw', tresc:'Omów motyw winy i kary w „Zbrodni i karze" oraz „Makbecie". Jaką rolę odgrywa sumienie?', done:false, notatki:''},
-  {id:'zad6', typ:'Kontekst', tresc:'Wyjaśnij pojęcie mesjanizmu i pokaż, jak objawia się w „Dziadach cz. III" Mickiewicza.', done:false, notatki:''},
-  {id:'zad7', typ:'Analiza', tresc:'Omów symbolikę Chochoła w „Weselu" Wyspiańskiego. Co symbolizuje scena chocholego tańca?', done:false, notatki:''},
-  {id:'zad8', typ:'Streszczenie', tresc:'Streść fabułę „Procesu" Kafki i wyjaśnij, co autor chciał powiedzieć przez absurd sytuacji Józefa K.', done:false, notatki:''},
-];
-
-var ROZPRAWKA_DATA = {
-  wstep: [
-    { id:'r_teza1', typ:'teza', tresc:'Od zarania dziejów literatura ukazuje, że [TEMAT] stanowi jeden z fundamentalnych aspektów ludzkiego doświadczenia.', done:false },
-    { id:'r_teza2', typ:'teza', tresc:'Pytanie o [TEMAT] nurtuje ludzkość od wieków – literatura staje się przestrzenią poszukiwania odpowiedzi.', done:false },
-    { id:'r_teza3', typ:'teza', tresc:'Jak pokazuje historia literatury, [TEMAT] może być zarówno źródłem siły, jak i przyczyną upadku.', done:false },
-  ],
-  argumenty: [
-    { id:'r_arg1', tresc:'Argument 1: [teza argumentu]. Potwierdza to przykład z [lektury] – [krótki opis sytuacji]. Autor ukazuje w ten sposób, że [wniosek].', done:false },
-    { id:'r_arg2', tresc:'Argument 2: [teza argumentu]. Doskonałym przykładem jest [bohater] z [lektury]. [Opis postaci/sytuacji]. Świadczy to o tym, że [wniosek].', done:false },
-    { id:'r_arg3', tresc:'Argument 3 (kontrargument): Z drugiej strony, można twierdzić, że [kontrargument]. Przykładem jest [lektura]. Jednakże [obalenie kontrargumentu].', done:false },
-  ],
-  zakonczenie: [
-    { id:'r_zak1', tresc:'Reasumując, przedstawione argumenty jednoznacznie wskazują, że [powtórzenie tezy własnymi słowami]. Literatura niezmiennie potwierdza, że [refleksja ogólna].', done:false },
-    { id:'r_zak2', tresc:'Przywołane przykłady z literatury dowodzą, że [teza]. To skłania do refleksji: [pytanie retoryczne lub myśl na zakończenie].', done:false },
-  ],
-  slownictwo: [
-    'Pragnę udowodnić, że...', 'Należy zaznaczyć, iż...', 'Potwierdzeniem tej tezy jest...',
-    'Warto w tym kontekście przywołać...', 'Jak wynika z analizy...', 'Co więcej,...',
-    'Mimo to, warto zauważyć, że...', 'Z perspektywy [bohatera]...', 'Autor ukazuje w ten sposób...',
-    'Podsumowując rozważania...', 'Wbrew pozorom...', 'Nie sposób pominąć faktu, że...',
-    'Kluczowym argumentem jest...', 'Należy podkreślić, że...', 'Z całą pewnością...',
-  ],
-  checklisty: [
-    { id:'ch1', txt:'Teza we wstępie sformułowana wyraźnie', done:false },
-    { id:'ch2', txt:'Co najmniej 2 argumenty z odwołaniem do lektur', done:false },
-    { id:'ch3', txt:'Każdy akapit zaczyna się od nowej myśli', done:false },
-    { id:'ch4', txt:'Wnioski logicznie wynikają z argumentów', done:false },
-    { id:'ch5', txt:'Zakończenie nawiązuje do tezy (bez kopiowania)', done:false },
-    { id:'ch6', txt:'Spójniki logiczne między zdaniami', done:false },
-    { id:'ch7', txt:'Brak błędów ortograficznych i interpunkcyjnych', done:false },
-    { id:'ch8', txt:'Objętość min. 250 słów', done:false },
-    { id:'ch9', txt:'Styl formalny – brak kolokwializmów', done:false },
-    { id:'ch10', txt:'Tytuły lektur kursywą lub w cudzysłowie', done:false },
-  ]
 };
 
 var MathView = function MathView(_ref_math) {
@@ -13113,7 +12999,9 @@ function exportToTxt(subjects, tracker) {
 var LS_BACKUP_KEY = 'maturahub_backups'; // stores last 5 full snapshots
 var MAX_BACKUPS = 5;
 
-// Save a full backup snapshot (with images, uncompressed)
+// Save a full backup snapshot (obrazki zawsze przechodzą przez to samo czyszczenie
+// co główny zapis — inaczej każda z 5 kopii dublowałaby pełne, nieskompresowane
+// base64 i szybko zapychała localStorage)
 function saveBackup(data) {
   try {
     var existing = JSON.parse(localStorage.getItem(LS_BACKUP_KEY) || '[]');
@@ -13126,7 +13014,7 @@ function saveBackup(data) {
         hour: '2-digit',
         minute: '2-digit'
       }),
-      data: data
+      data: prepareForStorage(data)
     };
     var updated = [snap].concat(_toConsumableArray(existing)).slice(0, MAX_BACKUPS);
     localStorage.setItem(LS_BACKUP_KEY, JSON.stringify(updated));
@@ -13143,8 +13031,6 @@ function loadBackups() {
 }
 
 // ─── SUPABASE AUTO-BACKUP ────────────────────────────────────────────────────
-
-// ─── SUPABASE AUTO-BACKUP ────────────────────────────────────────────────────
 var MAX_CLOUD_BACKUPS = 7;
 var LAST_CLOUD_BACKUP_KEY = 'maturahub_last_cloud_backup';
 
@@ -13154,7 +13040,7 @@ function saveCloudBackup(data) {
   supabase.from('cloud_backups').upsert({
     id: today,
     label: label,
-    data: data,
+    data: prepareForStorage(data),
     created_at: new Date().toISOString()
   }).then(function() {
     // keep only last 7
@@ -13865,6 +13751,19 @@ function App() {
     };
   }, []);
 
+  // Podłącz callback czyszczący: gdy obrazek zostanie wgrany do Storage, podmień
+  // jego base64 na URL także w LOKALNYM stanie apki (a nie tylko w danych wysłanych
+  // do Supabase). Bez tego base64 zostawałby w pamięci/localStorage na zawsze,
+  // powiększając kopie zapasowe przy każdym starcie apki.
+  useEffect(function () {
+    registerCleanedStateCallback(function (map) {
+      setState(function (prev) { return swapKnownImages(prev, map); });
+    });
+    return function () {
+      return registerCleanedStateCallback(null);
+    };
+  }, []);
+
   // Przy starcie: spróbuj załadować z Supabase (nowsze dane niż localStorage)
   useEffect(function () {
     setSyncStatusState('syncing');
@@ -13940,6 +13839,18 @@ function App() {
             }
           }
           // ── KONIEC MERGE ──
+
+          // ── MIGRACJA polData (lektury/motywy/zadania/rozprawka) ze starego localStorage ──
+          // Robimy to TUTAJ (a nie w PolishView) celowo: to jedyne miejsce, gdzie mamy
+          // pewność, że dane z Supabase już przyszły, więc nic ich zaraz nie nadpisze.
+          if (mergedSubjects.polish && !mergedSubjects.polish.polData) {
+            var legacyPolData = {};
+            try {
+              legacyPolData = JSON.parse(localStorage.getItem('polishData_v1') || localStorage.getItem('polishData_v2') || '{}') || {};
+            } catch(e) { legacyPolData = {}; }
+            mergedSubjects.polish = _objectSpread(_objectSpread({}, mergedSubjects.polish), {}, { polData: legacyPolData });
+          }
+          // ── KONIEC MIGRACJI polData ──
 
           var merged = _objectSpread(_objectSpread({}, prev), {}, {
             subjects: mergedSubjects,
