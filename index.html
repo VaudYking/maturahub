@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>M 2027</title>
+<title>MaturaHub — Matura 2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -12037,7 +12037,7 @@ var DiaryView = function DiaryView() {
     setWeekData(data);
     try { localStorage.setItem(weekKey, JSON.stringify(data)); } catch (e) {}
     // Sync do Supabase
-    supabase.from('diary_entries').upsert({ id: weekKey, data: data }).then(function() {});
+    supabase.from('diary_entries').upsert({ id: weekKey, data: data }).then(function() { notifyDiaryChanged(); });
   };
   var setScore = function setScore(day, cat, val) {
     var v = val === '' ? '' : Math.min(10, Math.max(0, parseInt(val) || 0));
@@ -12555,7 +12555,7 @@ function loadDiary2Week(weekKey, cats) {
 }
 function saveDiary2Week(weekKey, data) {
   try { localStorage.setItem(getDiary2DataKey(weekKey), JSON.stringify(data)); } catch(e) {}
-  supabase.from('diary2_entries').upsert({ id: weekKey, data: data }).then(function() {});
+  supabase.from('diary2_entries').upsert({ id: weekKey, data: data }).then(function() { notifyDiaryChanged(); });
 }
 
 var DIARY2_SETTINGS_KEY = 'diary2_settings_v1';
@@ -13460,6 +13460,13 @@ var BackupModal = function BackupModal(_ref31) {
 // Saldo = ŻYWA suma wszystkich punktów kiedykolwiek wpisanych do Dziennika 1
 // i Dziennika 2 (liczona na nowo za każdym odświeżeniem, więc poprawka starego
 // dnia od razu zmienia saldo) MINUS suma dotychczasowych zakupów w sklepie.
+
+// Powiadomienie: dziennik zapisał zmianę -> jeśli Sklep jest aktualnie
+// zamontowany, niech sam doliczy nowe punkty do salda (bez klikania "Odśwież").
+var _diaryChangedCallback = null;
+function registerDiaryChangedCallback(cb) { _diaryChangedCallback = cb; }
+function notifyDiaryChanged() { if (_diaryChangedCallback) _diaryChangedCallback(); }
+
 async function computeDiaryPointsTotal() {
   function sumRows(rows) {
     var t = 0;
@@ -13494,13 +13501,26 @@ async function loadShopData() {
 function saveShopData(items, purchases, adjustments) {
   return supabase.from('shop_data').upsert({ id: 'main', items: items, purchases: purchases, adjustments: adjustments || [], updated_at: new Date().toISOString() });
 }
+// Debounce + "tylko ostatni wygrywa": jeśli w krótkim czasie poleci kilka zapisów
+// (np. dwa szybkie kliknięcia "Kup"), wysyłamy tylko JEDEN request z najświeższym
+// stanem, zamiast kilku równoległych, które mogłyby się nawzajem nadpisać w złej
+// kolejności i "zgubić" zakup po odświeżeniu.
+var _shopSaveTimer = null;
+function scheduleSaveShopData(items, purchases, adjustments) {
+  if (_shopSaveTimer) clearTimeout(_shopSaveTimer);
+  _shopSaveTimer = setTimeout(function () {
+    saveShopData(items, purchases, adjustments);
+  }, 300);
+}
 
 var ShopView = function ShopView() {
   var _bal = React.useState(null); var earned = _bal[0], setEarned = _bal[1];
   var _loading = React.useState(true); var loading = _loading[0], setLoading = _loading[1];
-  var _items = React.useState([]); var items = _items[0], setItems = _items[1];
-  var _purchases = React.useState([]); var purchases = _purchases[0], setPurchases = _purchases[1];
-  var _adjustments = React.useState([]); var adjustments = _adjustments[0], setAdjustments = _adjustments[1];
+  // items/purchases/adjustments żyją w JEDNYM obiekcie stanu, zawsze aktualizowanym
+  // funkcyjnie (prev => ...). Dzięki temu żadna zmiana nie operuje na "starej"
+  // wersji z zamknięcia — to było źródło gubienia zakupów przy szybkich kliknięciach.
+  var _shop = React.useState({ items: [], purchases: [], adjustments: [] }); var shop = _shop[0], setShop = _shop[1];
+  var items = shop.items, purchases = shop.purchases, adjustments = shop.adjustments;
   var _editMode = React.useState(false); var editMode = _editMode[0], setEditMode = _editMode[1];
   var _newName = React.useState(''); var newName = _newName[0], setNewName = _newName[1];
   var _newPrice = React.useState(''); var newPrice = _newPrice[0], setNewPrice = _newPrice[1];
@@ -13514,9 +13534,7 @@ var ShopView = function ShopView() {
     setLoading(true);
     Promise.all([computeDiaryPointsTotal(), loadShopData()]).then(function (res) {
       setEarned(res[0]);
-      setItems(res[1].items);
-      setPurchases(res[1].purchases);
-      setAdjustments(res[1].adjustments);
+      setShop({ items: res[1].items, purchases: res[1].purchases, adjustments: res[1].adjustments });
       setLoading(false);
     }).catch(function (e) {
       console.warn('[Sklep] Błąd ładowania:', e);
@@ -13525,40 +13543,67 @@ var ShopView = function ShopView() {
     });
   };
 
-  React.useEffect(function () { refresh(); }, []);
+  // Sama liczba PKT (earned) — lżejsze niż pełny refresh(), nie rusza items/purchases,
+  // więc nie ma ryzyka nadpisania czegoś, co user właśnie edytuje w Sklepie.
+  var refreshEarnedOnly = function () {
+    computeDiaryPointsTotal().then(function (total) { setEarned(total); }).catch(function (e) {
+      console.warn('[Sklep] Błąd przeliczania punktów z dzienników:', e);
+    });
+  };
+
+  React.useEffect(function () {
+    refresh();
+    // Auto-odświeżenie salda, gdy dowolny dziennik zapisze zmianę — bez klikania.
+    // Lekki debounce na wypadek serii szybkich zapisów (np. klikanie wielu ocen pod rząd).
+    var t = null;
+    registerDiaryChangedCallback(function () {
+      if (t) clearTimeout(t);
+      t = setTimeout(refreshEarnedOnly, 500);
+    });
+    return function () {
+      registerDiaryChangedCallback(null);
+      if (t) clearTimeout(t);
+    };
+  }, []);
 
   var spent = purchases.reduce(function (s, p) { return s + (p.price || 0); }, 0);
   var adjustTotal = adjustments.reduce(function (s, a) { return s + (a.amount || 0); }, 0);
   var balance = earned === null ? null : earned - spent + adjustTotal;
 
   var buyItem = function (item) {
-    if (balance === null) return;
-    if (balance < item.price) {
-      setMsg({ type: 'err', text: 'Za mało PKT na "' + item.name + '" (brakuje ' + (item.price - balance) + ').' });
+    if (balance === null || balance < item.price) {
+      setMsg({ type: 'err', text: balance === null ? 'Poczekaj, saldo się jeszcze liczy...' : 'Za mało PKT na "' + item.name + '" (brakuje ' + (item.price - balance) + ').' });
       setTimeout(function () { setMsg(null); }, 3000);
       return;
     }
-    var purchase = { id: 'p_' + Date.now(), itemId: item.id, itemName: item.name, price: item.price, ts: Date.now() };
-    var newPurchases = [purchase].concat(purchases);
-    setPurchases(newPurchases);
-    saveShopData(items, newPurchases, adjustments);
+    setShop(function (prev) {
+      var purchase = { id: 'p_' + Date.now(), itemId: item.id, itemName: item.name, price: item.price, ts: Date.now() };
+      var next = Object.assign({}, prev, { purchases: [purchase].concat(prev.purchases) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
     setMsg({ type: 'ok', text: 'Kupiono: ' + item.name + ' za ' + item.price + ' PKT!' });
     setTimeout(function () { setMsg(null); }, 3000);
   };
 
   var undoPurchase = function (purchaseId) {
-    var newPurchases = purchases.filter(function (p) { return p.id !== purchaseId; });
-    setPurchases(newPurchases);
-    saveShopData(items, newPurchases, adjustments);
+    setShop(function (prev) {
+      var next = Object.assign({}, prev, { purchases: prev.purchases.filter(function (p) { return p.id !== purchaseId; }) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
   };
 
   var addAdjustment = function () {
     var amount = parseInt(adjAmount);
     if (isNaN(amount) || amount === 0) return;
-    var adj = { id: 'a_' + Date.now(), amount: amount, note: adjNote.trim() || (amount > 0 ? 'Korekta ręczna (+)' : 'Korekta ręczna (-)'), ts: Date.now() };
-    var newAdj = [adj].concat(adjustments);
-    setAdjustments(newAdj);
-    saveShopData(items, purchases, newAdj);
+    var noteVal = adjNote.trim() || (amount > 0 ? 'Korekta ręczna (+)' : 'Korekta ręczna (-)');
+    setShop(function (prev) {
+      var adj = { id: 'a_' + Date.now(), amount: amount, note: noteVal, ts: Date.now() };
+      var next = Object.assign({}, prev, { adjustments: [adj].concat(prev.adjustments) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
     setAdjAmount('');
     setAdjNote('');
     setShowAdjust(false);
@@ -13567,33 +13612,41 @@ var ShopView = function ShopView() {
   };
 
   var undoAdjustment = function (adjId) {
-    var newAdj = adjustments.filter(function (a) { return a.id !== adjId; });
-    setAdjustments(newAdj);
-    saveShopData(items, purchases, newAdj);
+    setShop(function (prev) {
+      var next = Object.assign({}, prev, { adjustments: prev.adjustments.filter(function (a) { return a.id !== adjId; }) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
   };
 
   var addItem = function () {
     var name = newName.trim();
     var price = parseInt(newPrice);
     if (!name || isNaN(price) || price <= 0) return;
-    var item = { id: 'it_' + Date.now(), name: name, price: price, repeatable: true };
-    var newItems = items.concat([item]);
-    setItems(newItems);
-    saveShopData(newItems, purchases, adjustments);
+    setShop(function (prev) {
+      var item = { id: 'it_' + Date.now(), name: name, price: price, repeatable: true };
+      var next = Object.assign({}, prev, { items: prev.items.concat([item]) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
     setNewName('');
     setNewPrice('');
   };
 
   var updateItem = function (id, patch) {
-    var newItems = items.map(function (it) { return it.id === id ? Object.assign({}, it, patch) : it; });
-    setItems(newItems);
-    saveShopData(newItems, purchases, adjustments);
+    setShop(function (prev) {
+      var next = Object.assign({}, prev, { items: prev.items.map(function (it) { return it.id === id ? Object.assign({}, it, patch) : it; }) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
   };
 
   var deleteItem = function (id) {
-    var newItems = items.filter(function (it) { return it.id !== id; });
-    setItems(newItems);
-    saveShopData(newItems, purchases, adjustments);
+    setShop(function (prev) {
+      var next = Object.assign({}, prev, { items: prev.items.filter(function (it) { return it.id !== id; }) });
+      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      return next;
+    });
   };
 
   return /*#__PURE__*/React.createElement('div', { className: 'fade-in', style: { paddingBottom: 40, marginTop: 32 } },
