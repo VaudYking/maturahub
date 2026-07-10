@@ -13499,19 +13499,19 @@ async function loadShopData() {
 }
 
 function saveShopData(items, purchases, adjustments) {
-  return supabase.from('shop_data').upsert({ id: 'main', items: items, purchases: purchases, adjustments: adjustments || [], updated_at: new Date().toISOString() });
+  var p = supabase.from('shop_data').upsert({ id: 'main', items: items, purchases: purchases, adjustments: adjustments || [], updated_at: new Date().toISOString() }).then(function (res) {
+    if (res && res.error) console.warn('[Sklep] Błąd zapisu do bazy:', res.error);
+    return res;
+  }).catch(function (e) {
+    console.warn('[Sklep] Wyjątek przy zapisie do bazy:', e);
+  });
+  _shopSavePromise = p;
+  return p;
 }
-// Debounce + "tylko ostatni wygrywa": jeśli w krótkim czasie poleci kilka zapisów
-// (np. dwa szybkie kliknięcia "Kup"), wysyłamy tylko JEDEN request z najświeższym
-// stanem, zamiast kilku równoległych, które mogłyby się nawzajem nadpisać w złej
-// kolejności i "zgubić" zakup po odświeżeniu.
-var _shopSaveTimer = null;
-function scheduleSaveShopData(items, purchases, adjustments) {
-  if (_shopSaveTimer) clearTimeout(_shopSaveTimer);
-  _shopSaveTimer = setTimeout(function () {
-    saveShopData(items, purchases, adjustments);
-  }, 300);
-}
+// Śledzimy ostatni wysłany zapis, żeby "Odśwież" mógł na niego poczekać zamiast
+// wyścigu — bez tego kliknięcie Odśwież tuż po zakupie potrafiło pobrać jeszcze
+// starą wersję z bazy i wyglądało jakby zakup "zniknął".
+var _shopSavePromise = Promise.resolve();
 
 var ShopView = function ShopView() {
   var _bal = React.useState(null); var earned = _bal[0], setEarned = _bal[1];
@@ -13532,7 +13532,9 @@ var ShopView = function ShopView() {
 
   var refresh = function () {
     setLoading(true);
-    Promise.all([computeDiaryPointsTotal(), loadShopData()]).then(function (res) {
+    Promise.resolve(_shopSavePromise).then(function () {
+      return Promise.all([computeDiaryPointsTotal(), loadShopData()]);
+    }).then(function (res) {
       setEarned(res[0]);
       setShop({ items: res[1].items, purchases: res[1].purchases, adjustments: res[1].adjustments });
       setLoading(false);
@@ -13579,7 +13581,7 @@ var ShopView = function ShopView() {
     setShop(function (prev) {
       var purchase = { id: 'p_' + Date.now(), itemId: item.id, itemName: item.name, price: item.price, ts: Date.now() };
       var next = Object.assign({}, prev, { purchases: [purchase].concat(prev.purchases) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
     setMsg({ type: 'ok', text: 'Kupiono: ' + item.name + ' za ' + item.price + ' PKT!' });
@@ -13589,7 +13591,7 @@ var ShopView = function ShopView() {
   var undoPurchase = function (purchaseId) {
     setShop(function (prev) {
       var next = Object.assign({}, prev, { purchases: prev.purchases.filter(function (p) { return p.id !== purchaseId; }) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
   };
@@ -13601,7 +13603,7 @@ var ShopView = function ShopView() {
     setShop(function (prev) {
       var adj = { id: 'a_' + Date.now(), amount: amount, note: noteVal, ts: Date.now() };
       var next = Object.assign({}, prev, { adjustments: [adj].concat(prev.adjustments) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
     setAdjAmount('');
@@ -13614,7 +13616,7 @@ var ShopView = function ShopView() {
   var undoAdjustment = function (adjId) {
     setShop(function (prev) {
       var next = Object.assign({}, prev, { adjustments: prev.adjustments.filter(function (a) { return a.id !== adjId; }) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
   };
@@ -13626,7 +13628,7 @@ var ShopView = function ShopView() {
     setShop(function (prev) {
       var item = { id: 'it_' + Date.now(), name: name, price: price, repeatable: true };
       var next = Object.assign({}, prev, { items: prev.items.concat([item]) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
     setNewName('');
@@ -13636,7 +13638,7 @@ var ShopView = function ShopView() {
   var updateItem = function (id, patch) {
     setShop(function (prev) {
       var next = Object.assign({}, prev, { items: prev.items.map(function (it) { return it.id === id ? Object.assign({}, it, patch) : it; }) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
   };
@@ -13644,7 +13646,7 @@ var ShopView = function ShopView() {
   var deleteItem = function (id) {
     setShop(function (prev) {
       var next = Object.assign({}, prev, { items: prev.items.filter(function (it) { return it.id !== id; }) });
-      scheduleSaveShopData(next.items, next.purchases, next.adjustments);
+      saveShopData(next.items, next.purchases, next.adjustments);
       return next;
     });
   };
