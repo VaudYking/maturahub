@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>M2027</title>
+<title>MaturaHub — Matura 2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -6863,270 +6863,244 @@ var EngWords = function EngWords(_ref14) {
   }));
 };
 
-/* ---------- ZDANIA ---------- */
+/* ---------- ZDANIA (podzielone na kategorie, jak słówka) ---------- */
 var EngSentences = function EngSentences(_ref17) {
   var data = _ref17.data,
     onChange = _ref17.onChange;
-  // data: [{id, word, sentences:{PS:[],PC:[],PaSi:[],FS:[]}}]
+  // data: [{id, name, items:[{id, word, sentences:{PS:[],PC:[],PaSi:[],FS:[]}}]}]
   var _React$useState9 = React.useState(data || []),
     _React$useState0 = _slicedToArray(_React$useState9, 2),
-    items = _React$useState0[0],
-    setItems = _React$useState0[1];
+    sections = _React$useState0[0],
+    setSections = _React$useState0[1];
   var _React$useState1 = React.useState(null),
     _React$useState10 = _slicedToArray(_React$useState1, 2),
-    openItem = _React$useState10[0],
-    setOpenItem = _React$useState10[1];
+    openSec = _React$useState10[0],
+    setOpenSec = _React$useState10[1];
+  var _React$useState1b = React.useState(null),
+    _React$useState10b = _slicedToArray(_React$useState1b, 2),
+    openItem = _React$useState10b[0],
+    setOpenItem = _React$useState10b[1];
   var _React$useState11 = React.useState(false),
     _React$useState12 = _slicedToArray(_React$useState11, 2),
-    adding = _React$useState12[0],
-    setAdding = _React$useState12[1];
+    addingSec = _React$useState12[0],
+    setAddingSec = _React$useState12[1];
   var _React$useState13 = React.useState(''),
     _React$useState14 = _slicedToArray(_React$useState13, 2),
-    newWord = _React$useState14[0],
-    setNewWord = _React$useState14[1];
+    newSecName = _React$useState14[0],
+    setNewSecName = _React$useState14[1];
+  var _React$useState15 = React.useState({}),
+    _React$useState16 = _slicedToArray(_React$useState15, 2),
+    newWordBySec = _React$useState16[0],
+    setNewWordBySec = _React$useState16[1];
   var save = function save(updated) {
-    setItems(updated);
+    setSections(updated);
     onChange(updated);
   };
-  var addItem = function addItem() {
-    if (!newWord.trim()) return;
-    var blank = {
-      PS: [''],
-      PC: [''],
-      PaSi: [''],
-      FS: ['']
+  var addSection = function addSection() {
+    if (!newSecName.trim()) return;
+    var s = {
+      id: 'ss_' + Date.now(),
+      name: newSecName.trim(),
+      items: []
     };
-    var item = {
-      id: 'si_' + Date.now(),
-      word: newWord.trim(),
-      sentences: blank
-    };
-    var updated = [].concat(_toConsumableArray(items), [item]);
+    var updated = [].concat(_toConsumableArray(sections), [s]);
     save(updated);
-    setNewWord('');
-    setAdding(false);
+    setNewSecName('');
+    setAddingSec(false);
+    setOpenSec(s.id);
+  };
+  var removeSection = function removeSection(secId) {
+    save(sections.filter(function (s) { return s.id !== secId; }));
+    if (openSec === secId) setOpenSec(null);
+  };
+  var addItem = function addItem(secId) {
+    var word = (newWordBySec[secId] || '').trim();
+    if (!word) return;
+    var blank = { PS: [''], PC: [''], PaSi: [''], FS: [''] };
+    var item = { id: 'si_' + Date.now(), word: word, sentences: blank };
+    var updated = sections.map(function (s) {
+      return s.id === secId ? _objectSpread(_objectSpread({}, s), {}, {
+        items: [].concat(_toConsumableArray(s.items), [item])
+      }) : s;
+    });
+    save(updated);
+    setNewWordBySec(_objectSpread(_objectSpread({}, newWordBySec), {}, _defineProperty({}, secId, '')));
     setOpenItem(item.id);
   };
-  var updateSentence = function updateSentence(itemId, tenseKey, idx, val) {
-    var updated = items.map(function (it) {
-      if (it.id !== itemId) return it;
-      var s = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, _toConsumableArray(it.sentences[tenseKey])));
-      s[tenseKey][idx] = val;
-      return _objectSpread(_objectSpread({}, it), {}, {
-        sentences: s
+  var removeItem = function removeItem(secId, itemId) {
+    var updated = sections.map(function (s) {
+      return s.id === secId ? _objectSpread(_objectSpread({}, s), {}, {
+        items: s.items.filter(function (it) { return it.id !== itemId; })
+      }) : s;
+    });
+    save(updated);
+    if (openItem === itemId) setOpenItem(null);
+  };
+  var updateSentence = function updateSentence(secId, itemId, tenseKey, idx, val) {
+    var updated = sections.map(function (s) {
+      if (s.id !== secId) return s;
+      return _objectSpread(_objectSpread({}, s), {}, {
+        items: s.items.map(function (it) {
+          if (it.id !== itemId) return it;
+          var sen = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, _toConsumableArray(it.sentences[tenseKey])));
+          sen[tenseKey][idx] = val;
+          return _objectSpread(_objectSpread({}, it), {}, { sentences: sen });
+        })
       });
     });
     save(updated);
   };
-  var addSentenceLine = function addSentenceLine(itemId, tenseKey) {
-    var updated = items.map(function (it) {
-      if (it.id !== itemId) return it;
-      var s = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, [].concat(_toConsumableArray(it.sentences[tenseKey]), [''])));
-      return _objectSpread(_objectSpread({}, it), {}, {
-        sentences: s
+  var addSentenceLine = function addSentenceLine(secId, itemId, tenseKey) {
+    var updated = sections.map(function (s) {
+      if (s.id !== secId) return s;
+      return _objectSpread(_objectSpread({}, s), {}, {
+        items: s.items.map(function (it) {
+          if (it.id !== itemId) return it;
+          var sen = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, [].concat(_toConsumableArray(it.sentences[tenseKey]), [''])));
+          return _objectSpread(_objectSpread({}, it), {}, { sentences: sen });
+        })
       });
     });
     save(updated);
   };
-  var removeSentenceLine = function removeSentenceLine(itemId, tenseKey, idx) {
-    var updated = items.map(function (it) {
-      if (it.id !== itemId) return it;
-      var lines = it.sentences[tenseKey].filter(function (_, i) {
-        return i !== idx;
-      });
-      var s = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, lines.length > 0 ? lines : ['']));
-      return _objectSpread(_objectSpread({}, it), {}, {
-        sentences: s
+  var removeSentenceLine = function removeSentenceLine(secId, itemId, tenseKey, idx) {
+    var updated = sections.map(function (s) {
+      if (s.id !== secId) return s;
+      return _objectSpread(_objectSpread({}, s), {}, {
+        items: s.items.map(function (it) {
+          if (it.id !== itemId) return it;
+          var lines = it.sentences[tenseKey].filter(function (_, i) { return i !== idx; });
+          var sen = _objectSpread(_objectSpread({}, it.sentences), {}, _defineProperty({}, tenseKey, lines.length > 0 ? lines : ['']));
+          return _objectSpread(_objectSpread({}, it), {}, { sentences: sen });
+        })
       });
     });
     save(updated);
-  };
-  var removeItem = function removeItem(id) {
-    save(items.filter(function (it) {
-      return it.id !== id;
-    }));
-    if (openItem === id) setOpenItem(null);
   };
   var tenseKeys = ['PS', 'PC', 'PaSi', 'FS'];
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 16
-    }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18
-    }
-  }, "\uD83D\uDCAC Zdania"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    style: {
-      fontSize: 12
+  return /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("div", {
+      style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }
     },
-    onClick: function onClick() {
-      return setAdding(true);
-    }
-  }, /*#__PURE__*/React.createElement(Icon, {
-    name: "plus",
-    size: 13
-  }), " Dodaj s\u0142owo")), adding && /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 8,
-      marginBottom: 16
-    },
-    className: "fade-in"
-  }, /*#__PURE__*/React.createElement("input", {
-    value: newWord,
-    onChange: function onChange(e) {
-      return setNewWord(e.target.value);
-    },
-    placeholder: "S\u0142owo/temat zda\u0144...",
-    autoFocus: true,
-    onKeyDown: function onKeyDown(e) {
-      return e.key === 'Enter' && addItem();
-    }
-  }), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-primary",
-    onClick: addItem
-  }, "Dodaj"), /*#__PURE__*/React.createElement("button", {
-    className: "btn btn-ghost",
-    onClick: function onClick() {
-      setAdding(false);
-      setNewWord('');
-    }
-  }, "\u2715")), items.length === 0 && /*#__PURE__*/React.createElement("p", {
-    style: {
-      color: 'var(--muted)',
-      fontSize: 13,
-      padding: '20px 0'
-    }
-  }, "Brak s\u0142\xF3w. Dodaj pierwsze!"), items.map(function (it) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: it.id,
-      className: "card",
-      style: {
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        cursor: 'pointer'
-      },
-      onClick: function onClick() {
-        return setOpenItem(openItem === it.id ? null : it.id);
-      }
-    }, /*#__PURE__*/React.createElement("div", {
-      style: {
-        flex: 1
-      }
-    }, /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontSize: 11,
-        color: 'var(--muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '.05em',
-        marginRight: 8
-      }
-    }, "s\u0142owo"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        fontFamily: 'Syne',
-        fontWeight: 600,
-        fontSize: 15
-      }
-    }, it.word)), /*#__PURE__*/React.createElement("button", {
-      style: {
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        color: 'var(--muted)',
-        fontSize: 11,
-        padding: '2px 6px'
-      },
-      onClick: function onClick(e) {
-        e.stopPropagation();
-        removeItem(it.id);
-      }
-    }, "\u2715"), /*#__PURE__*/React.createElement("span", {
-      style: {
-        color: 'var(--muted)',
-        fontSize: 10,
-        transform: openItem === it.id ? 'rotate(180deg)' : 'none',
-        transition: 'transform .2s'
-      }
-    }, "\u25BC")), openItem === it.id && /*#__PURE__*/React.createElement("div", {
-      style: {
-        marginTop: 14
-      },
-      className: "fade-in"
-    }, TENSES.map(function (label, ti) {
-      var key = tenseKeys[ti];
-      return /*#__PURE__*/React.createElement("div", {
-        key: key,
-        style: {
-          marginBottom: 14
-        }
-      }, /*#__PURE__*/React.createElement("div", {
-        style: {
-          fontSize: 12,
-          color: 'var(--eng)',
-          fontWeight: 600,
-          marginBottom: 8,
-          fontFamily: 'Syne'
-        }
-      }, label), it.sentences[key].map(function (sent, idx) {
-        return /*#__PURE__*/React.createElement("div", {
-          key: idx,
-          style: {
-            display: 'flex',
-            gap: 6,
-            marginBottom: 6
-          }
-        }, /*#__PURE__*/React.createElement("input", {
-          value: sent,
-          onChange: function onChange(e) {
-            return updateSentence(it.id, key, idx, e.target.value);
-          },
-          placeholder: "Wpisz zdanie...",
-          style: {
-            fontSize: 13
-          }
-        }), /*#__PURE__*/React.createElement("button", {
-          style: {
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--muted)',
-            flexShrink: 0
-          },
-          onClick: function onClick() {
-            return removeSentenceLine(it.id, key, idx);
-          }
-        }, /*#__PURE__*/React.createElement(Icon, {
-          name: "x",
-          size: 12
-        })), idx === it.sentences[key].length - 1 && /*#__PURE__*/React.createElement("button", {
-          style: {
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: 'var(--eng)',
-            flexShrink: 0,
-            fontSize: 18,
-            lineHeight: 1
-          },
-          title: "Dodaj kolejne zdanie",
-          onClick: function onClick() {
-            return addSentenceLine(it.id, key);
-          }
-        }, "+"));
-      }));
-    })));
-  }));
+      /*#__PURE__*/React.createElement("h3", { style: { fontFamily: 'Syne', fontSize: 18 } }, "\uD83D\uDCAC Zdania"),
+      /*#__PURE__*/React.createElement("button", {
+        className: "btn btn-ghost", style: { fontSize: 12 },
+        onClick: function () { setAddingSec(true); }
+      }, /*#__PURE__*/React.createElement(Icon, { name: "plus", size: 13 }), " Dodaj nowy dzia\u0142")
+    ),
+    addingSec && /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, marginBottom: 16 }, className: "fade-in" },
+      /*#__PURE__*/React.createElement("input", {
+        value: newSecName,
+        onChange: function (e) { setNewSecName(e.target.value); },
+        placeholder: "Nazwa dzia\u0142u (np. Jedzenie i picie)",
+        autoFocus: true,
+        onKeyDown: function (e) { return e.key === 'Enter' && addSection(); }
+      }),
+      /*#__PURE__*/React.createElement("button", { className: "btn btn-primary", onClick: addSection }, "Dodaj"),
+      /*#__PURE__*/React.createElement("button", {
+        className: "btn btn-ghost",
+        onClick: function () { setAddingSec(false); setNewSecName(''); }
+      }, "\u2715")
+    ),
+    sections.length === 0 && /*#__PURE__*/React.createElement("p", {
+      style: { color: 'var(--muted)', fontSize: 13, padding: '20px 0' }
+    }, "Brak dzia\u0142\xF3w. Dodaj pierwszy!"),
+    sections.map(function (sec) {
+      return /*#__PURE__*/React.createElement("div", { key: sec.id, className: "card", style: { marginBottom: 12 } },
+        /*#__PURE__*/React.createElement("div", {
+          style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' },
+          onClick: function () { setOpenSec(openSec === sec.id ? null : sec.id); }
+        },
+          /*#__PURE__*/React.createElement("span", {
+            style: { fontFamily: 'Syne', fontWeight: 600, fontSize: 15, flex: 1 }
+          }, sec.name),
+          /*#__PURE__*/React.createElement("span", {
+            className: "pill", style: { fontSize: 11, background: 'rgba(255,255,255,.06)' }
+          }, sec.items.length),
+          /*#__PURE__*/React.createElement("button", {
+            style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: '2px 6px' },
+            onClick: function (e) { e.stopPropagation(); removeSection(sec.id); }
+          }, "\u2715"),
+          /*#__PURE__*/React.createElement("span", {
+            style: { color: 'var(--muted)', fontSize: 10, transform: openSec === sec.id ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }
+          }, "\u25BC")
+        ),
+        openSec === sec.id && /*#__PURE__*/React.createElement("div", { style: { marginTop: 14 }, className: "fade-in" },
+          /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, marginBottom: 14 } },
+            /*#__PURE__*/React.createElement("input", {
+              value: newWordBySec[sec.id] || '',
+              onChange: function (e) {
+                setNewWordBySec(_objectSpread(_objectSpread({}, newWordBySec), {}, _defineProperty({}, sec.id, e.target.value)));
+              },
+              placeholder: "S\u0142owo/temat zda\u0144...",
+              onKeyDown: function (e) { return e.key === 'Enter' && addItem(sec.id); },
+              style: { fontSize: 13 }
+            }),
+            /*#__PURE__*/React.createElement("button", {
+              className: "btn btn-primary", style: { fontSize: 12, flexShrink: 0 },
+              onClick: function () { addItem(sec.id); }
+            }, "Dodaj")
+          ),
+          sec.items.length === 0 && /*#__PURE__*/React.createElement("p", {
+            style: { color: 'var(--muted)', fontSize: 12, padding: '8px 0' }
+          }, "Brak s\u0142\xF3w w tym dziale."),
+          sec.items.map(function (it) {
+            return /*#__PURE__*/React.createElement("div", {
+              key: it.id, className: "card", style: { marginBottom: 10, background: 'rgba(255,255,255,.02)' }
+            },
+              /*#__PURE__*/React.createElement("div", {
+                style: { display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' },
+                onClick: function () { setOpenItem(openItem === it.id ? null : it.id); }
+              },
+                /*#__PURE__*/React.createElement("div", { style: { flex: 1 } },
+                  /*#__PURE__*/React.createElement("span", {
+                    style: { fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginRight: 8 }
+                  }, "s\u0142owo"),
+                  /*#__PURE__*/React.createElement("span", { style: { fontFamily: 'Syne', fontWeight: 600, fontSize: 15 } }, it.word)
+                ),
+                /*#__PURE__*/React.createElement("button", {
+                  style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: '2px 6px' },
+                  onClick: function (e) { e.stopPropagation(); removeItem(sec.id, it.id); }
+                }, "\u2715"),
+                /*#__PURE__*/React.createElement("span", {
+                  style: { color: 'var(--muted)', fontSize: 10, transform: openItem === it.id ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }
+                }, "\u25BC")
+              ),
+              openItem === it.id && /*#__PURE__*/React.createElement("div", { style: { marginTop: 14 }, className: "fade-in" },
+                TENSES.map(function (label, ti) {
+                  var key = tenseKeys[ti];
+                  return /*#__PURE__*/React.createElement("div", { key: key, style: { marginBottom: 14 } },
+                    /*#__PURE__*/React.createElement("div", {
+                      style: { fontSize: 12, color: 'var(--eng)', fontWeight: 600, marginBottom: 8, fontFamily: 'Syne' }
+                    }, label),
+                    it.sentences[key].map(function (sent, idx) {
+                      return /*#__PURE__*/React.createElement("div", { key: idx, style: { display: 'flex', gap: 6, marginBottom: 6 } },
+                        /*#__PURE__*/React.createElement("input", {
+                          value: sent,
+                          onChange: function (e) { updateSentence(sec.id, it.id, key, idx, e.target.value); },
+                          placeholder: "Wpisz zdanie...",
+                          style: { fontSize: 13 }
+                        }),
+                        /*#__PURE__*/React.createElement("button", {
+                          style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', flexShrink: 0 },
+                          onClick: function () { removeSentenceLine(sec.id, it.id, key, idx); }
+                        }, /*#__PURE__*/React.createElement(Icon, { name: "x", size: 12 })),
+                        idx === it.sentences[key].length - 1 && /*#__PURE__*/React.createElement("button", {
+                          style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--eng)', flexShrink: 0, fontSize: 18, lineHeight: 1 },
+                          title: "Dodaj kolejne zdanie",
+                          onClick: function () { addSentenceLine(sec.id, it.id, key); }
+                        }, "+")
+                      );
+                    })
+                  );
+                })
+              )
+            );
+          })
+        )
+      );
+    })
+  );
 };
 
 /* ---------- CZASY ---------- */
