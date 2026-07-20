@@ -6471,7 +6471,8 @@ var TENSES = ['Present Simple – czas teraźniejszy prosty', 'Present Continuou
 /* ---------- SŁOWA ---------- */
 var EngWords = function EngWords(_ref14) {
   var data = _ref14.data,
-    onChange = _ref14.onChange;
+    onChange = _ref14.onChange,
+    topics = _ref14.topics;
   // data: [{id, name, words:[{id,pl,en}]}]
   var _React$useState = React.useState(data || []),
     _React$useState2 = _slicedToArray(_React$useState, 2),
@@ -6497,6 +6498,8 @@ var EngWords = function EngWords(_ref14) {
     setSections(updated);
     onChange(updated);
   };
+  var usedNames = sections.map(function (s) { return s.name; });
+  var availableTopics = (topics || []).filter(function (t) { return usedNames.indexOf(t.name) === -1; });
   var addSection = function addSection() {
     if (!newSecName.trim()) return;
     var s = {
@@ -6571,7 +6574,7 @@ var EngWords = function EngWords(_ref14) {
   }, /*#__PURE__*/React.createElement(Icon, {
     name: "plus",
     size: 13
-  }), " Dodaj nowy dzia\u0142")), /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:4,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:"3px",marginBottom:12}},
+  }), " Dodaj dzia\u0142 z Temat\xF3w")), /*#__PURE__*/React.createElement("div", {style:{display:"flex",gap:4,background:"var(--surface2)",border:"1px solid var(--border)",borderRadius:8,padding:"3px",marginBottom:12}},
     React.createElement("button",{onClick:function(){setHideCol("none");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="none"?"var(--eng)":"transparent",color:hideCol==="none"?"#fff":"var(--muted)",fontWeight:hideCol==="none"?600:400}},"Pokaż wszystko"),
     React.createElement("button",{onClick:function(){setHideCol("pl");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="pl"?"var(--eng)":"transparent",color:hideCol==="pl"?"#fff":"var(--muted)",fontWeight:hideCol==="pl"?600:400}},"🇵🇱 Zakryj PL"),
     React.createElement("button",{onClick:function(){setHideCol("en");},style:{padding:"4px 12px",borderRadius:6,border:"none",cursor:"pointer",fontSize:11,fontFamily:"Outfit,sans-serif",background:hideCol==="en"?"var(--eng)":"transparent",color:hideCol==="en"?"#fff":"var(--muted)",fontWeight:hideCol==="en"?600:400}},"🇬🇧 Zakryj EN")
@@ -6582,19 +6585,19 @@ var EngWords = function EngWords(_ref14) {
       marginBottom: 16
     },
     className: "fade-in"
-  }, /*#__PURE__*/React.createElement("input", {
+  }, availableTopics.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: { fontSize: 12, color: 'var(--muted)', flex: 1 }
+  }, "Brak wolnych temat\xF3w \u2014 doda\u0142e\u015b ju\u017c wszystkie z zak\u0142adki \"Tematy\", albo nie masz tam jeszcze \u017cadnych. Przejd\u017a do zak\u0142adki Tematy, \u017ceby doda\u0107 nowy.") : /*#__PURE__*/React.createElement("select", {
     value: newSecName,
-    onChange: function onChange(e) {
-      return setNewSecName(e.target.value);
-    },
-    placeholder: "Nazwa dzia\u0142u (np. Cz\u0142owiek \u2013 wygl\u0105d)",
+    onChange: function onChange(e) { return setNewSecName(e.target.value); },
     autoFocus: true,
-    onKeyDown: function onKeyDown(e) {
-      return e.key === 'Enter' && addSection();
-    }
-  }), /*#__PURE__*/React.createElement("button", {
+    style: { fontSize: 13, flex: 1 }
+  }, /*#__PURE__*/React.createElement("option", { value: "" }, "Wybierz temat..."), availableTopics.map(function (t) {
+    return /*#__PURE__*/React.createElement("option", { key: t.id, value: t.name }, t.name);
+  })), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-primary",
-    onClick: addSection
+    onClick: addSection,
+    disabled: availableTopics.length === 0
   }, "Dodaj"), /*#__PURE__*/React.createElement("button", {
     className: "btn btn-ghost",
     onClick: function onClick() {
@@ -6866,7 +6869,8 @@ var EngWords = function EngWords(_ref14) {
 /* ---------- ZDANIA (podzielone na kategorie, jak słówka) ---------- */
 var EngSentences = function EngSentences(_ref17) {
   var data = _ref17.data,
-    onChange = _ref17.onChange;
+    onChange = _ref17.onChange,
+    topics = _ref17.topics;
   // data: [{id, name, items:[{id, word, sentences:{PS:[],PC:[],PaSi:[],FS:[]}}]}]
   var _React$useState9 = React.useState(data || []),
     _React$useState0 = _slicedToArray(_React$useState9, 2),
@@ -6896,6 +6900,8 @@ var EngSentences = function EngSentences(_ref17) {
     setSections(updated);
     onChange(updated);
   };
+  var usedNames = sections.map(function (s) { return s.name; });
+  var availableTopics = (topics || []).filter(function (t) { return usedNames.indexOf(t.name) === -1; });
   var addSection = function addSection() {
     if (!newSecName.trim()) return;
     var s = {
@@ -6986,17 +6992,20 @@ var EngSentences = function EngSentences(_ref17) {
       /*#__PURE__*/React.createElement("button", {
         className: "btn btn-ghost", style: { fontSize: 12 },
         onClick: function () { setAddingSec(true); }
-      }, /*#__PURE__*/React.createElement(Icon, { name: "plus", size: 13 }), " Dodaj nowy dzia\u0142")
+      }, /*#__PURE__*/React.createElement(Icon, { name: "plus", size: 13 }), " Dodaj dzia\u0142 z Temat\xF3w")
     ),
     addingSec && /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, marginBottom: 16 }, className: "fade-in" },
-      /*#__PURE__*/React.createElement("input", {
+      availableTopics.length === 0 ? /*#__PURE__*/React.createElement("p", {
+        style: { fontSize: 12, color: 'var(--muted)', flex: 1 }
+      }, "Brak wolnych temat\xF3w \u2014 doda\u0142e\u015b ju\u017c wszystkie z zak\u0142adki \"Tematy\", albo nie masz tam jeszcze \u017cadnych. Przejd\u017a do zak\u0142adki Tematy, \u017ceby doda\u0107 nowy.") : /*#__PURE__*/React.createElement("select", {
         value: newSecName,
         onChange: function (e) { setNewSecName(e.target.value); },
-        placeholder: "Nazwa dzia\u0142u (np. Jedzenie i picie)",
         autoFocus: true,
-        onKeyDown: function (e) { return e.key === 'Enter' && addSection(); }
-      }),
-      /*#__PURE__*/React.createElement("button", { className: "btn btn-primary", onClick: addSection }, "Dodaj"),
+        style: { fontSize: 13, flex: 1 }
+      }, /*#__PURE__*/React.createElement("option", { value: "" }, "Wybierz temat..."), availableTopics.map(function (t) {
+        return /*#__PURE__*/React.createElement("option", { key: t.id, value: t.name }, t.name);
+      })),
+      /*#__PURE__*/React.createElement("button", { className: "btn btn-primary", onClick: addSection, disabled: availableTopics.length === 0 }, "Dodaj"),
       /*#__PURE__*/React.createElement("button", {
         className: "btn btn-ghost",
         onClick: function () { setAddingSec(false); setNewSecName(''); }
@@ -7104,192 +7113,99 @@ var EngSentences = function EngSentences(_ref17) {
 };
 
 /* ---------- CZASY ---------- */
-var EngTenses = function EngTenses(_ref18) {
+/* ---------- TEMATY (wspólna lista kategorii dla Słówek i Zdań) ---------- */
+var EngTopics = function EngTopics(_ref18) {
   var data = _ref18.data,
     onChange = _ref18.onChange;
-  var defaultData = function defaultData() {
-    return TENSES.map(function (label, i) {
-      return {
-        id: 't' + i,
-        label: label,
-        notes: '',
-        examples: ['']
-      };
-    });
-  };
-  var _React$useState15 = React.useState(data && data.length > 0 ? data : defaultData()),
-    _React$useState16 = _slicedToArray(_React$useState15, 2),
-    tenses = _React$useState16[0],
-    setTenses = _React$useState16[1];
-  var _React$useState17 = React.useState(null), notesModal = _React$useState17[0], setNotesModal = _React$useState17[1];
+  var _React$useStateT = React.useState(data || []),
+    _React$useStateT2 = _slicedToArray(_React$useStateT, 2),
+    topics = _React$useStateT2[0],
+    setTopics = _React$useStateT2[1];
+  var _React$useStateT3 = React.useState(''),
+    _React$useStateT4 = _slicedToArray(_React$useStateT3, 2),
+    newName = _React$useStateT4[0],
+    setNewName = _React$useStateT4[1];
+  var _React$useStateT5 = React.useState(null),
+    _React$useStateT6 = _slicedToArray(_React$useStateT5, 2),
+    editingId = _React$useStateT6[0],
+    setEditingId = _React$useStateT6[1];
+  var _React$useStateT7 = React.useState(''),
+    _React$useStateT8 = _slicedToArray(_React$useStateT7, 2),
+    editingName = _React$useStateT8[0],
+    setEditingName = _React$useStateT8[1];
   var save = function save(updated) {
-    setTenses(updated);
+    setTopics(updated);
     onChange(updated);
   };
-  var updateNotes = function updateNotes(id, val) {
-    return save(tenses.map(function (t) {
-      return t.id === id ? _objectSpread(_objectSpread({}, t), {}, {
-        notes: val
-      }) : t;
-    }));
-  };
-  var updateEx = function updateEx(id, idx, val) {
-    return save(tenses.map(function (t) {
-      if (t.id !== id) return t;
-      var ex = _toConsumableArray(t.examples);
-      ex[idx] = val;
-      return _objectSpread(_objectSpread({}, t), {}, {
-        examples: ex
-      });
-    }));
-  };
-  var addEx = function addEx(id) {
-    return save(tenses.map(function (t) {
-      return t.id === id ? _objectSpread(_objectSpread({}, t), {}, {
-        examples: [].concat(_toConsumableArray(t.examples), [''])
-      }) : t;
-    }));
-  };
-  var removeEx = function removeEx(id, idx) {
-    return save(tenses.map(function (t) {
-      if (t.id !== id) return t;
-      var ex = t.examples.filter(function (_, i) {
-        return i !== idx;
-      });
-      return _objectSpread(_objectSpread({}, t), {}, {
-        examples: ex.length > 0 ? ex : ['']
-      });
-    }));
-  };
-  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("h3", {
-    style: {
-      fontFamily: 'Syne',
-      fontSize: 18,
-      marginBottom: 16
+  var addTopic = function addTopic() {
+    var name = newName.trim();
+    if (!name) return;
+    if (topics.some(function (t) { return t.name.toLowerCase() === name.toLowerCase(); })) {
+      setNewName('');
+      return;
     }
-  }, "\uD83D\uDCD6 Czasy gramatyczne"), tenses.map(function (t) {
-    return /*#__PURE__*/React.createElement("div", {
-      key: t.id,
-      className: "card",
-      style: {
-        marginBottom: 12
-      }
-    }, /*#__PURE__*/React.createElement("h4", {
-      style: {
-        fontFamily: 'Syne',
-        fontSize: 15,
-        color: 'var(--eng)',
-        marginBottom: 12
-      }
-    }, t.label), /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 11,
-        color: 'var(--muted)',
-        display: 'block',
-        marginBottom: 4,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '.05em'
-      }
-    }, "Notatki / zasady"), /*#__PURE__*/React.createElement("textarea", {
-      value: t.notes,
-      onChange: function onChange(e) {
-        return updateNotes(t.id, e.target.value);
-      },
-      placeholder: "Kiedy u\u017Cywamy, budowa zdania, wyj\u0105tki...",
-      rows: 6,
-      style: {
-        marginBottom: 6,
-        fontSize: 13,
-        minHeight: 120,
-        resize: 'vertical'
-      }
-    }), /*#__PURE__*/React.createElement("button", {
-      onClick: function onClick() { setNotesModal(t.id); },
-      className: 'btn btn-ghost',
-      style: { fontSize: 11, padding: '3px 10px', marginBottom: 10 }
-    }, "\uD83D\uDD0D Otw\xF3rz pe\u0142ny edytor"), /*#__PURE__*/React.createElement("label", {
-      style: {
-        fontSize: 11,
-        color: 'var(--muted)',
-        display: 'block',
-        marginBottom: 6,
-        fontWeight: 600,
-        textTransform: 'uppercase',
-        letterSpacing: '.05em'
-      }
-    }, "Przyk\u0142ady zda\u0144"), t.examples.map(function (ex, idx) {
-      return /*#__PURE__*/React.createElement("div", {
-        key: idx,
-        style: {
-          display: 'flex',
-          gap: 6,
-          marginBottom: 6
-        }
-      }, /*#__PURE__*/React.createElement("input", {
-        value: ex,
-        onChange: function onChange(e) {
-          return updateEx(t.id, idx, e.target.value);
-        },
-        placeholder: "Przyk\u0142adowe zdanie...",
-        style: {
-          fontSize: 13
-        }
-      }), /*#__PURE__*/React.createElement("button", {
-        style: {
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--muted)',
-          flexShrink: 0
-        },
-        onClick: function onClick() {
-          return removeEx(t.id, idx);
-        }
-      }, /*#__PURE__*/React.createElement(Icon, {
-        name: "x",
-        size: 12
-      })), idx === t.examples.length - 1 && /*#__PURE__*/React.createElement("button", {
-        style: {
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          color: 'var(--eng)',
-          flexShrink: 0,
-          fontSize: 18
-        },
-        onClick: function onClick() {
-          return addEx(t.id);
-        }
-      }, "+"));
+    var t = { id: 'tp_' + Date.now(), name: name };
+    save([].concat(_toConsumableArray(topics), [t]));
+    setNewName('');
+  };
+  var startEdit = function startEdit(t) {
+    setEditingId(t.id);
+    setEditingName(t.name);
+  };
+  var saveEdit = function saveEdit() {
+    if (!editingName.trim()) { setEditingId(null); return; }
+    save(topics.map(function (t) {
+      return t.id === editingId ? _objectSpread(_objectSpread({}, t), {}, { name: editingName.trim() }) : t;
     }));
-  })), notesModal && /*#__PURE__*/React.createElement("div", {
-    className: 'modal-overlay',
-    onClick: function onClick(e) { if (e.target === e.currentTarget) setNotesModal(null); }
-  }, /*#__PURE__*/React.createElement("div", {
-    className: 'modal-box',
-    style: { maxWidth: 700, width: '100%', display: 'flex', flexDirection: 'column', gap: 12 }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
-  }, /*#__PURE__*/React.createElement("h3", {
-    style: { fontFamily: 'Syne', color: 'var(--eng)', fontSize: 16 }
-  }, tenses.find(function(t){ return t.id === notesModal; }) ? tenses.find(function(t){ return t.id === notesModal; }).label : ''), /*#__PURE__*/React.createElement("button", {
-    className: 'btn btn-ghost',
-    style: { fontSize: 12 },
-    onClick: function onClick() { setNotesModal(null); }
-  }, "\u2715 Zamknij")), /*#__PURE__*/React.createElement("textarea", {
-    value: tenses.find(function(t){ return t.id === notesModal; }) ? tenses.find(function(t){ return t.id === notesModal; }).notes : '',
-    onChange: function onChange(e) { updateNotes(notesModal, e.target.value); },
-    placeholder: "Kiedy u\u017Cywamy, budowa zdania, wyj\u0105tki...",
-    style: {
-      width: '100%',
-      minHeight: 400,
-      fontSize: 14,
-      lineHeight: 1.6,
-      resize: 'vertical',
-      overflowY: 'auto'
-    }
-  })));
+    setEditingId(null);
+  };
+  var removeTopic = function removeTopic(id) {
+    save(topics.filter(function (t) { return t.id !== id; }));
+  };
+  return /*#__PURE__*/React.createElement("div", null,
+    /*#__PURE__*/React.createElement("h3", { style: { fontFamily: 'Syne', fontSize: 18, marginBottom: 6 } }, "\uD83D\uDDC2\uFE0F Tematy"),
+    /*#__PURE__*/React.createElement("p", {
+      style: { fontSize: 12, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }
+    }, "To jedyne miejsce, gdzie tworzysz nowe tematy. W zak\u0142adkach S\u0142\xF3wka i Zdania wybierasz dzia\u0142 z tej listy zamiast wpisywa\u0107 now\u0105 nazw\u0119 osobno w ka\u017cdym miejscu. Usuni\u0119cie tematu tutaj NIE kasuje s\u0142\xF3wek ani zda\u0144, kt\xF3re ju\u017c do niego przypisa\u0142e\u015b \u2014 one zostaj\u0105, tylko sam temat znika z listy do wyboru przy nowych dzia\u0142ach."),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, marginBottom: 18 } },
+      /*#__PURE__*/React.createElement("input", {
+        value: newName,
+        onChange: function (e) { setNewName(e.target.value); },
+        placeholder: "Nowy temat (np. Zdrowie)",
+        onKeyDown: function (e) { return e.key === 'Enter' && addTopic(); }
+      }),
+      /*#__PURE__*/React.createElement("button", { className: "btn btn-primary", onClick: addTopic }, "Dodaj")
+    ),
+    topics.length === 0 && /*#__PURE__*/React.createElement("p", {
+      style: { color: 'var(--muted)', fontSize: 13, padding: '20px 0' }
+    }, "Brak temat\xF3w. Dodaj pierwszy!"),
+    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      topics.map(function (t) {
+        return /*#__PURE__*/React.createElement("div", {
+          key: t.id, className: "card",
+          style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px' }
+        },
+          editingId === t.id
+            ? /*#__PURE__*/React.createElement("input", {
+                value: editingName,
+                onChange: function (e) { setEditingName(e.target.value); },
+                onKeyDown: function (e) { return e.key === 'Enter' && saveEdit(); },
+                onBlur: saveEdit,
+                autoFocus: true,
+                style: { flex: 1, fontSize: 14 }
+              })
+            : /*#__PURE__*/React.createElement("span", {
+                style: { flex: 1, fontFamily: 'Syne', fontWeight: 600, fontSize: 14, cursor: 'pointer' },
+                onClick: function () { startEdit(t); }
+              }, t.name),
+          /*#__PURE__*/React.createElement("button", {
+            style: { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 11, padding: '2px 6px' },
+            onClick: function () { removeTopic(t.id); }
+          }, "\u2715")
+        );
+      })
+    )
+  );
 };
 
 /* ---------- OPIS OBRAZKA ---------- */
@@ -9205,6 +9121,7 @@ var EnglishView = function EnglishView(_ref25) {
     words: [],
     sentences: [],
     tenses: [],
+    topics: [],
     imageDesc: [],
     email: [],
     quiz: [],
@@ -9239,9 +9156,9 @@ var EnglishView = function EnglishView(_ref25) {
     label: 'Zdania',
     emoji: '💬'
   }, {
-    id: 'tenses',
-    label: 'Czasy',
-    emoji: '📖'
+    id: 'topics',
+    label: 'Tematy',
+    emoji: '🗂️'
   }, {
     id: 'imgdesc',
     label: 'Opis obrazka',
@@ -9398,6 +9315,7 @@ var EnglishView = function EnglishView(_ref25) {
     key: tab
   }, tab === 'words' && /*#__PURE__*/React.createElement(EngWords, {
     data: eng.words,
+    topics: eng.topics,
     onChange: function onChange(v) {
       return updateEngData('words', v);
     }
@@ -9421,13 +9339,14 @@ var EnglishView = function EnglishView(_ref25) {
     wordsData: eng.words
   }), tab === 'sentences' && /*#__PURE__*/React.createElement(EngSentences, {
     data: eng.sentences,
+    topics: eng.topics,
     onChange: function onChange(v) {
       return updateEngData('sentences', v);
     }
-  }), tab === 'tenses' && /*#__PURE__*/React.createElement(EngTenses, {
-    data: eng.tenses,
+  }), tab === 'topics' && /*#__PURE__*/React.createElement(EngTopics, {
+    data: eng.topics,
     onChange: function onChange(v) {
-      return updateEngData('tenses', v);
+      return updateEngData('topics', v);
     }
   }), tab === 'imgdesc' && /*#__PURE__*/React.createElement(EngImageDesc, {
     data: eng.imageDesc,
