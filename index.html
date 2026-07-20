@@ -7121,10 +7121,6 @@ var EngTopics = function EngTopics(_ref18) {
     _React$useStateT2 = _slicedToArray(_React$useStateT, 2),
     topics = _React$useStateT2[0],
     setTopics = _React$useStateT2[1];
-  var _React$useStateT3 = React.useState(''),
-    _React$useStateT4 = _slicedToArray(_React$useStateT3, 2),
-    newName = _React$useStateT4[0],
-    setNewName = _React$useStateT4[1];
   var _React$useStateT5 = React.useState(null),
     _React$useStateT6 = _slicedToArray(_React$useStateT5, 2),
     editingId = _React$useStateT6[0],
@@ -7136,17 +7132,6 @@ var EngTopics = function EngTopics(_ref18) {
   var save = function save(updated) {
     setTopics(updated);
     onChange(updated);
-  };
-  var addTopic = function addTopic() {
-    var name = newName.trim();
-    if (!name) return;
-    if (topics.some(function (t) { return t.name.toLowerCase() === name.toLowerCase(); })) {
-      setNewName('');
-      return;
-    }
-    var t = { id: 'tp_' + Date.now(), name: name };
-    save([].concat(_toConsumableArray(topics), [t]));
-    setNewName('');
   };
   var startEdit = function startEdit(t) {
     setEditingId(t.id);
@@ -7166,16 +7151,7 @@ var EngTopics = function EngTopics(_ref18) {
     /*#__PURE__*/React.createElement("h3", { style: { fontFamily: 'Syne', fontSize: 18, marginBottom: 6 } }, "\uD83D\uDDC2\uFE0F Tematy"),
     /*#__PURE__*/React.createElement("p", {
       style: { fontSize: 12, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }
-    }, "To jedyne miejsce, gdzie tworzysz nowe tematy. W zak\u0142adkach S\u0142\xF3wka i Zdania wybierasz dzia\u0142 z tej listy zamiast wpisywa\u0107 now\u0105 nazw\u0119 osobno w ka\u017cdym miejscu. Usuni\u0119cie tematu tutaj NIE kasuje s\u0142\xF3wek ani zda\u0144, kt\xF3re ju\u017c do niego przypisa\u0142e\u015b \u2014 one zostaj\u0105, tylko sam temat znika z listy do wyboru przy nowych dzia\u0142ach."),
-    /*#__PURE__*/React.createElement("div", { style: { display: 'flex', gap: 8, marginBottom: 18 } },
-      /*#__PURE__*/React.createElement("input", {
-        value: newName,
-        onChange: function (e) { setNewName(e.target.value); },
-        placeholder: "Nowy temat (np. Zdrowie)",
-        onKeyDown: function (e) { return e.key === 'Enter' && addTopic(); }
-      }),
-      /*#__PURE__*/React.createElement("button", { className: "btn btn-primary", onClick: addTopic }, "Dodaj")
-    ),
+    }, "Lista dzia\u0142\xF3w dost\u0119pnych do wyboru w zak\u0142adkach S\u0142\xF3wka i Zdania. Kliknij nazw\u0119 \u017ceby zmieni\u0107, \u2715 \u017ceby usun\u0105\u0107 (nie kasuje s\u0142\xF3wek/zda\u0144 ju\u017c przypisanych do danego tematu, tylko zdejmuje go z listy do wyboru)."),
     topics.length === 0 && /*#__PURE__*/React.createElement("p", {
       style: { color: 'var(--muted)', fontSize: 13, padding: '20px 0' }
     }, "Brak temat\xF3w. Dodaj pierwszy!"),
