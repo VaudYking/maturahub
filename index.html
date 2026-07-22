@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>M2027</title>
+<title>MaturaHub — Matura 2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -1639,8 +1639,13 @@ function _flushSyncToSupabase() {
             console.warn('Supabase upsert error:', upsertResult.error);
             setSyncStatus('error');
           } else if (_imageUploadFailed) {
-            console.warn('[MaturaHub] Zapis do bazy OK, ale co najmniej jeden obrazek nie wgrał się do Storage — sprawdź konsolę.');
+            console.warn('[MaturaHub] Zapis do bazy OK, ale co najmniej jeden obrazek nie wgrał się do Storage mimo 3 prób — spróbuję ponownie za 30s.');
             setSyncStatus('error');
+            // Sam ponów całą synchronizację za 30s, żeby przejściowy problem (np. budząca się
+            // baza) naprawił się bez potrzeby ręcznej interwencji.
+            setTimeout(function () {
+              scheduleSyncToSupabase(data);
+            }, 30000);
           } else {
             setSyncStatus('synced');
             notifyCleanedState(_uploadedImageMap);
@@ -1747,26 +1752,32 @@ function swapKnownImages(value, map) {
 }
 
 // Helper: upload single base64 image to Supabase Storage, return public URL or original
+function _sleep(ms) { return new Promise(function(res) { setTimeout(res, ms); }); }
+
 async function uploadSingleImageToStorage(base64DataUrl, folder, id) {
   if (!base64DataUrl || !base64DataUrl.startsWith('data:image')) return base64DataUrl;
   // Already a storage URL — skip
   if (base64DataUrl.startsWith('https://')) return base64DataUrl;
-  try {
-    var ext = base64DataUrl.includes('png') ? 'png' : 'jpg';
-    var fileName = folder + '/' + (id || Date.now()) + '.' + ext;
-    var blob = dataUrlToBlob(base64DataUrl);
-    var _up = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, blob, { upsert: true, contentType: blob.type });
-    if (_up.data) {
-      var _url = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
-      _uploadedImageMap[base64DataUrl] = _url.data.publicUrl;
-      return _url.data.publicUrl;
+  var ext = base64DataUrl.includes('png') ? 'png' : 'jpg';
+  var fileName = folder + '/' + (id || Date.now()) + '.' + ext;
+  var blob = dataUrlToBlob(base64DataUrl);
+  var maxAttempts = 3;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      var _up = await supabase.storage.from(STORAGE_BUCKET).upload(fileName, blob, { upsert: true, contentType: blob.type });
+      if (_up.data) {
+        var _url = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(fileName);
+        _uploadedImageMap[base64DataUrl] = _url.data.publicUrl;
+        return _url.data.publicUrl;
+      }
+      console.warn('[MaturaHub] Upload obrazka nieudany, próba ' + attempt + '/' + maxAttempts + ' (brak data w odpowiedzi):', fileName, _up.error);
+    } catch(e) {
+      console.warn('[MaturaHub] Upload obrazka nieudany, próba ' + attempt + '/' + maxAttempts + ' (wyjątek):', folder, id, e);
     }
-    console.warn('[MaturaHub] Upload obrazka nieudany (brak data w odpowiedzi):', fileName, _up.error);
-    _imageUploadFailed = true;
-  } catch(e) {
-    console.warn('[MaturaHub] Upload obrazka nieudany (wyjątek):', folder, id, e);
-    _imageUploadFailed = true;
+    if (attempt < maxAttempts) await _sleep(attempt * 1500); // 1.5s, potem 3s przed kolejną próbą
   }
+  console.warn('[MaturaHub] Upload obrazka ostatecznie nieudany po ' + maxAttempts + ' próbach:', fileName);
+  _imageUploadFailed = true;
   return base64DataUrl;
 }
 
