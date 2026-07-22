@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>MaturaHub — Matura 2027</title>
+<title>M2027</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
@@ -6883,6 +6883,7 @@ var EngSentences = function EngSentences(_ref17) {
     onChange = _ref17.onChange,
     topics = _ref17.topics;
   // data: [{id, name, items:[{id, word, sentences:{PS:[],PC:[],PaSi:[],FS:[]}}]}]
+  var tenseRefs = React.useRef({});
   var _React$useState9 = React.useState(data || []),
     _React$useState0 = _slicedToArray(_React$useState9, 2),
     sections = _React$useState0[0],
@@ -7086,58 +7087,48 @@ var EngSentences = function EngSentences(_ref17) {
               openItem === it.id && /*#__PURE__*/React.createElement("div", { style: { marginTop: 14 }, className: "fade-in" },
                 TENSES.map(function (label, ti) {
                   var key = tenseKeys[ti];
+                  var nextKey = tenseKeys[ti + 1];
                   return /*#__PURE__*/React.createElement("div", { key: key, style: { marginBottom: 18 } },
                     /*#__PURE__*/React.createElement("div", {
                       style: { fontSize: 12, color: 'var(--eng)', fontWeight: 600, marginBottom: 8, fontFamily: 'Syne' }
                     }, label),
-                    it.sentences[key].map(function (sent, idx) {
-                      var isLast = idx === it.sentences[key].length - 1;
-                      return /*#__PURE__*/React.createElement("div", {
-                        key: idx,
-                        style: { display: 'flex', gap: 6, marginBottom: 8, alignItems: 'flex-start', flexWrap: 'wrap' }
-                      },
-                        /*#__PURE__*/React.createElement("textarea", {
-                          value: sent,
-                          onChange: function (e) { updateSentence(sec.id, it.id, key, idx, e.target.value); },
-                          onKeyDown: function (e) {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault();
-                              if (isLast) addSentenceLine(sec.id, it.id, key);
-                            }
-                          },
-                          placeholder: "Wpisz zdanie... (Enter = nowa linia, Shift+Enter = nowy wers w tym samym polu)",
-                          rows: 2,
-                          style: {
-                            fontSize: 14,
-                            lineHeight: 1.5,
-                            padding: '10px 12px',
-                            flex: '1 1 240px',
-                            minWidth: 0,
-                            resize: 'vertical',
-                            fontFamily: 'Outfit,sans-serif'
+                    /*#__PURE__*/React.createElement("textarea", {
+                      ref: function (el) { tenseRefs.current[it.id + '_' + key] = el; },
+                      value: (it.sentences[key] && it.sentences[key][0]) || '',
+                      onChange: function (e) { updateSentence(sec.id, it.id, key, 0, e.target.value); },
+                      onKeyDown: function (e) {
+                        if (e.key !== 'Enter') return;
+                        var ta = e.target;
+                        var pos = ta.selectionStart;
+                        var before = ta.value.slice(0, pos);
+                        var isDoubleEnter = before.endsWith('\n');
+                        if (e.shiftKey || isDoubleEnter) {
+                          e.preventDefault();
+                          // przy podwójnym Enter usuń pustą linijkę, którą sam zostawił pierwszy Enter
+                          if (isDoubleEnter && !e.shiftKey) {
+                            var cleaned = ta.value.slice(0, pos - 1) + ta.value.slice(pos);
+                            updateSentence(sec.id, it.id, key, 0, cleaned);
                           }
-                        }),
-                        /*#__PURE__*/React.createElement("div", { style: { display: 'flex', flexDirection: 'row', gap: 4, flexShrink: 0 } },
-                          /*#__PURE__*/React.createElement("button", {
-                            style: {
-                              background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', borderRadius: 8,
-                              cursor: 'pointer', color: 'var(--muted)', width: 32, height: 32,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            },
-                            title: "Usu\u0144 t\u0119 lini\u0119",
-                            onClick: function () { removeSentenceLine(sec.id, it.id, key, idx); }
-                          }, /*#__PURE__*/React.createElement(Icon, { name: "x", size: 14 })),
-                          isLast && /*#__PURE__*/React.createElement("button", {
-                            style: {
-                              background: 'rgba(59,130,246,.12)', border: '1px solid rgba(59,130,246,.3)', borderRadius: 8,
-                              cursor: 'pointer', color: 'var(--eng)', width: 32, height: 32, fontSize: 18, lineHeight: 1,
-                              display: 'flex', alignItems: 'center', justifyContent: 'center'
-                            },
-                            title: "Dodaj kolejne zdanie (albo wci\u015Bnij Enter w polu)",
-                            onClick: function () { addSentenceLine(sec.id, it.id, key); }
-                          }, "+")
-                        )
-                      );
+                          if (nextKey) {
+                            var nextEl = tenseRefs.current[it.id + '_' + nextKey];
+                            if (nextEl) { nextEl.focus(); nextEl.selectionStart = nextEl.selectionEnd = nextEl.value.length; }
+                          } else {
+                            ta.blur();
+                          }
+                        }
+                        // zwykły Enter = normalna nowa linia w tym samym polu, nic nie robimy
+                      },
+                      placeholder: "Wpisz zdania... (Enter = nowa linia, 2x Enter lub Shift+Enter = nast\u0119pny czas)",
+                      rows: 3,
+                      style: {
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        padding: '10px 12px',
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        resize: 'vertical',
+                        fontFamily: 'Outfit,sans-serif'
+                      }
                     })
                   );
                 })
